@@ -342,19 +342,8 @@ class TFView extends Widget
 			var factor = this.B(i, k, u, t);
 			point.x += w[i].px * factor
 			point.y += w[i].py * factor
-
-			//console.log(u, i,k, factor)
 			sum += factor
-			// if(i == n+1) {
-			// 	point.x += w[i-1].px * factor
-			// 	point.y += w[i-1].py * factor
-			// } else {
-			// 	point.x += w[i].px * factor
-			// 	point.y += w[i].py * factor
-			// }
 		}
-		
-		//console.log("---------------", point,sum.toFixed(3))
 		return point;
 	}
     // TODO 
@@ -487,7 +476,7 @@ class TFView extends Widget
 			return a.px - b.px;
 		})
 		let k = 3;
-		if(sortedPoints.length <= 3) {
+		if(sortedPoints.length <= 4) {
 			k = sortedPoints.length-1
 		}
 		var w = sortedPoints
@@ -812,7 +801,6 @@ class TFView extends Widget
 		    		"y" : point.getPosition().y 
 	    		},
 		    	oldSize )[ 0 ];
-			console.log(x)
     		point.setPosition( 
     			TFView.ocpWidth + ( this.opacityCanvasContainer.getSize().x - 2*TFView.ocpWidth ) * x,
     			point.getPosition().y

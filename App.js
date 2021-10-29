@@ -297,7 +297,7 @@ class App extends Widget {
  				view.worldSpaceToDataSpace( dims ),
  				dims,
 				this.lightingCheckBox.isChecked(), 
-				0.5 );
+				0.25 );
 		}
 
 		view.clear();
@@ -334,19 +334,19 @@ class App extends Widget {
 		var bboxCornersDataSpace = view.getBBoxCorners( dims );
 		var v2 = bboxCornersDataSpace[2];
 		var v3 = bboxCornersDataSpace[3];
-		var mid = glMatrix.vec3.fromValues((v2[0] + v3[0])/2, (v2[1] + v3[1])/2, (v2[2] + v3[2])/2)
+		var mid = glMatrix.vec3.fromValues((v2[0] + v3[0])/2-dims[0]/2, (v2[1] + v3[1])/2, (v2[2] + v3[2])/2)
 		view.renderText(	
-			"l" ,
+			"light" ,
 			'rgb(255,255,255)',
 			view.dataSpacePositionToScreenSpacePos(dims, new Float32Array(mid))
 		)
-		for(var cornerIndex = 0; cornerIndex < bboxCornersDataSpace.length; cornerIndex++) {
-			view.renderText(
-				"v" + cornerIndex,
-				'rgb(255,255,255)',
-				view.dataSpacePositionToScreenSpacePos(dims, bboxCornersDataSpace[cornerIndex])
-			)
-		}
+		// for(var cornerIndex = 0; cornerIndex < bboxCornersDataSpace.length; cornerIndex++) {
+		// 	view.renderText(
+		// 		"v" + cornerIndex,
+		// 		'rgb(255,255,255)',
+		// 		view.dataSpacePositionToScreenSpacePos(dims, bboxCornersDataSpace[cornerIndex])
+		// 	)
+		// }
 		 
 	
 	}
@@ -710,6 +710,7 @@ class App extends Widget {
 
 		document.querySelector( self.TFView.getSelector()  ).addEventListener( 'opacityTFModified', function( e ) {
 	    	self.VolRenderer.setColorTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
+			self.VolRenderer.setOpacityTF( self.TFView.getOpacityBuffer())
 			self.updateAll();
 
 	    }, false );

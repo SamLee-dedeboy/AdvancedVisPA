@@ -64,7 +64,10 @@ const cutPlaneFsSrc =
 
 		 float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
 		 vec3 color = texture(colorTextureSampler, vec2(normDataValue, 0.5)).rgb;
-		 fragColor = vec4(color,1);
+		//  if(color.a > 0.0) {
+		// 	 color.rgb /= color.a;
+		//  }
+		 fragColor = vec4(color.rgb,1);
     }`;
 
 /// TODO Shaders for Texture Based Volume Rendering ////////////////////////////
@@ -120,6 +123,7 @@ const viewAlignedPlaneInstancedFsSrc =
 	uniform highp sampler2D opcSampler;
 	uniform float dataMin;
 	uniform float dataMax;
+	uniform float alphaScale;
 	out vec4 fragColor;
 	in vec3 texCoord;
 	void main(void) {
@@ -129,6 +133,7 @@ const viewAlignedPlaneInstancedFsSrc =
 		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
 		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
 		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
+		opacity = alphaScale + (1.0-opacity)*alphaScale;
 		fragColor = vec4(color,opacity); 	
 		//fragColor = vec4(255, 255, 255, 0.5);
     }`;
@@ -219,9 +224,11 @@ const viewAlignedPlaneFsSrc =
 	uniform int doLighting;
 	uniform highp sampler3D volSampler;
 	uniform highp sampler2D colSampler;
-	//uniform highp sampler2D opcSampler;
+	uniform highp sampler2D opcSampler;
 	uniform float dataMin;
 	uniform float dataMax;
+	uniform float alphaScale;
+
 	out vec4 fragColor;
 
 	void main(void) {
@@ -279,17 +286,14 @@ const viewAlignedPlaneFsSrc =
 		}
 		float dataValue = texture(volSampler, texCoord).r;
 		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
-		//float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
+		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
 
-		vec4 color = texture(colSampler, vec2(normDataValue, 0.5)).rgba;
-		if(color.a > 0.0) {
-			color.rgb/=color.a;
-		}
+		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
+		opacity = opacity*alphaScale;
 		color.rgb *= light;
 		color.rgb += specular;
-		fragColor = color;
-		//fragColor = vec4(color,opacity);
-		//fragColor = vec4(255, 255, 255, opacity);
+		//fragColor = color;
+		fragColor = vec4(color, opacity);
 	}`;
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -335,7 +339,7 @@ class VolRenderer {
         this.id = "VolRenderer_" + VolRenderer.nextId++;
         this.glCanvas.setAttribute( 'id', this.id );
 
-        this.gl = this.glCanvas.getContext( "webgl2", { antialias: true } );
+        this.gl = this.glCanvas.getContext( "webgl2", { antialias: true} );
         var gl = this.gl;
 
 		const ext = gl.getExtension("EXT_color_buffer_float");
@@ -442,8 +446,10 @@ class VolRenderer {
 		this.glCanvas.height  = viewHeight;
 
 		gl.useProgram(  this.cuttingPlaneShaderProgram );
-		gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
-
+		gl.enable( gl.DEPTH_TEST );
+		gl.depthFunc( gl.LESS );
+		gl.disable( gl.BLEND );
+		gl.depthMask( true );
 		gl.activeTexture( gl.TEXTURE0 );
 		gl.bindTexture( gl.TEXTURE_3D, this.volTex );
 
@@ -528,8 +534,8 @@ class VolRenderer {
 		var rightVec = glMatrix.vec3.create();
 		glMatrix.vec3.cross( rightVec, upVector, normalVec );
 		glMatrix.vec3.normalize( rightVec, rightVec );
-
-		
+		//console.log(sampleDistance)
+		var alphaScale = sampleDistance;
 	    var maxDim = Math.max( Math.max( dims[ 0 ], dims[ 1 ] ), dims[ 2 ] );
 
 		// the spacing between the planes in world space
@@ -626,7 +632,7 @@ class VolRenderer {
 		// 	// }
 		// }
 		//Vin = new Float32Array(Vin)
-		Vin = new Float32Array([0, 1, 2, 3, 4, 5, 6])
+		Vin = new Float32Array([0, 1, 2, 3, 4, 5,6])
 		
 	
 		
@@ -637,7 +643,19 @@ class VolRenderer {
 		this.glCanvas.height = viewHeight;
 
 		gl.viewport( 0, 0, viewWidth, viewHeight );
+
 		gl.disable( gl.CULL_FACE );
+		gl.enable( gl.DEPTH_TEST );
+		gl.depthFunc( gl.LESS );
+		gl.depthMask( false );
+		gl.enable( gl.BLEND );
+		gl.blendFuncSeparate(
+			gl.SRC_ALPHA, 
+			gl.ONE_MINUS_SRC_ALPHA, 
+			gl.ONE,
+			gl.ONE_MINUS_SRC_ALPHA
+		);	
+
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 		gl.bufferData( gl.ARRAY_BUFFER, Vin, gl.DYNAMIC_DRAW, 0 );
 
@@ -645,7 +663,7 @@ class VolRenderer {
 
 		gl.uniform1i( gl.getUniformLocation( sp, "volSampler" ), 0 );
 		gl.uniform1i( gl.getUniformLocation( sp, "colSampler" ), 1 );
-		//gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
+		gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
 
 		gl.uniform3fv( gl.getUniformLocation( sp, "vecView" ), new Float32Array( translationDirection ) );
 		gl.uniform1f( gl.getUniformLocation( sp, "dt" ), dt );
@@ -672,7 +690,7 @@ class VolRenderer {
 		gl.uniform1f( gl.getUniformLocation( sp, "yDim" ), dims[ 1 ] );
 		gl.uniform1f( gl.getUniformLocation( sp, "zDim" ), dims[ 2 ] );
 
-		//gl.uniform1f( gl.getUniformLocation( sp, "alphaScale" ), alphaScale );
+		gl.uniform1f( gl.getUniformLocation( sp, "alphaScale" ), alphaScale );
 		gl.uniform1i( gl.getUniformLocation( sp, "doLighting" ), doLighting ? 1 : 0 );
 
 		gl.uniformMatrix4fv( 
@@ -704,7 +722,7 @@ class VolRenderer {
 		gl.drawArraysInstanced(
 			gl.TRIANGLE_FAN, 
 			0, 
-			Vin.length - 1, 
+			Vin.length-1, 
 			NSample );
 		// Vin = new Float32Array([
 		// 	0, 1, 2,
@@ -1057,28 +1075,28 @@ class VolRenderer {
 	setColorTF( colorTF, opacityTF)
 	{
 		// merge colorTF and opacityTF together
-		var colorAlphaTF = new Float32Array(colorTF.length + opacityTF.length) 
+		// var colorAlphaTF = new Float32Array(colorTF.length + opacityTF.length) 
 
-		for(var i = 0; i < opacityTF.length; i++) {
-			colorAlphaTF[4*i] = colorTF[3*i]
-			colorAlphaTF[4*i+1] = colorTF[3*i+1]
-			colorAlphaTF[4*i+2] = colorTF[3*i+2]
-			colorAlphaTF[4*i+3] = opacityTF[i]
-		}
+		// for(var i = 0; i < opacityTF.length; i++) {
+		// 	var a = opacityTF[i];
+		// 	colorAlphaTF[4*i] = colorTF[3*i] * a
+		// 	colorAlphaTF[4*i+1] = colorTF[3*i+1] * a 
+		// 	colorAlphaTF[4*i+2] = colorTF[3*i+2] * a
+		// 	colorAlphaTF[4*i+3] = a
+		// }
     	var gl = this.gl;
 		gl.bindTexture( gl.TEXTURE_2D, this.colTex );
-		gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
-
+		//gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
 		gl.texImage2D(
 			gl.TEXTURE_2D,       // texture type
 		    0,                   // level
-			gl.RGBA32F,           // internalFormat
-			colorAlphaTF.length / 4,  // width
+			gl.RGB32F,           // internalFormat
+			colorTF.length / 3,  // width
 			1,                   // height
 			0,                   // border
-			gl.RGBA,              // format
+			gl.RGB,              // format
 			gl.FLOAT,            // type
-			new Float32Array( colorAlphaTF ) );       // data
+			new Float32Array( colorTF ) );       // data
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
     	gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
@@ -1094,7 +1112,7 @@ class VolRenderer {
 	setTF( colorTF, opacityTF )
 	{
 		this.setColorTF( colorTF, opacityTF );
-		//this.setOpacityTF( opacityTF );
+		this.setOpacityTF( opacityTF );
 
 		return this;
 	}
