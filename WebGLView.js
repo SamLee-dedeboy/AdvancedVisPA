@@ -211,7 +211,7 @@ class WebGLView extends Widget {
     // of the image should be
     // mode should be gl.LINE_STRIP, gl.TRIANGLES, etc, which remembers is accessed from the context
 
-    render2d( vertices, boundingBox, color, mode )
+    render2d( vertices, boundingBox, color, mode, viewport)
     {
         var gl = this.gl;   
  
@@ -223,7 +223,7 @@ class WebGLView extends Widget {
             vertices,
             gl.DYNAMIC_DRAW
         );
-
+        gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3])
         // Transformation matrices to go from data space to screen space for the 2d projection
         // remember matrices must be multiplied in the reverse of the logical order
 
