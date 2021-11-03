@@ -5,6 +5,7 @@ class HistogramView extends WebGLView {
 
         super( idPrefix, parent, x, y, width, height );
         this.model = model
+        
         this.barStartX = HistogramStyles.barStartX
         this.barStartY = HistogramStyles.barStartY
         this.barEndY = HistogramStyles.barEndY
@@ -144,7 +145,10 @@ class HistogramView extends WebGLView {
         // which is relative to histogram canvas(data space)
         // so in order to leave out space for lables,
         // the bounding box lower left corner should be negative
-        this.render2d(new Float32Array(lines), {xMin: -this.barStartX, yMin: -this.barStartY, xMax: this.canvasWidth(), yMax: this.canvasHeight() - this.barStartY}, HistogramStyles.barColor, this.gl.TRIANGLES)
+
+        //this.render2d(new Float32Array(lines), {xMin: -this.barStartX, yMin: -this.barStartY, xMax: this.canvasWidth()-this.barStartX, yMax: this.canvasHeight() - this.barStartY}, [0,0,255,1], this.gl.TRIANGLES)
+        this.render2d(new Float32Array(lines), {xMin: this.model.xMin, yMin: this.model.yMin, xMax: this.model.xMax, yMax:this.model.yMax}, [0,0,255,1], this.gl.TRIANGLES, [this.barStartX, this.barStartY, this.canvasWidth() - this.barStartX, this.canvasHeight() - this.barStartY - this.barEndY])
+
     }
     renderLabels() {
         let axisOffset = HistogramStyles.axisOffset + HistogramStyles.axisLineWidth + 1
@@ -230,44 +234,58 @@ class HistogramView extends WebGLView {
     }
     generateLines(model) {
         // calculate the width of each bin
-        let offset = (this.canvasWidth() - this.barStartX)/model.nBins
+        //let offset = (this.canvasWidth() - this.barStartX)/model.nBins
+        let offset = (this.model.xMax - this.model.xMin)/model.nBins
         let lines = new Array()
         for(let i = 0; i < model.pBarsHeight.length; i++) {
             // generate vertex coordinates with generateRectangleVertexPoints()
-            lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.pBarsHeight[i]))
+            //lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.pBarsHeight[i]))
+            lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.bars[i]))
         }
         return lines
     }
    
-    generateRectangleVertexPoints(i, offset, pHeight) {
-        let barsViewHeight = this.canvasHeight()-this.barEndY-this.barStartY
+    generateRectangleVertexPoints(i, offset, height) {
         return [
-            //
-            // triangle 1
-            //
-            // lower left
-            i*offset, 0, 
-            // lower right
+            // t1
+            i*offset, 0,
             (i+1)*offset, 0,
-            // upper left
-            i*offset, barsViewHeight*pHeight,
-
-            // triangle 2
-            // lower right
+            i*offset, height,
+            i*offset, height,
             (i+1)*offset, 0,
-            // upper right
-            (i+1)*offset, barsViewHeight*pHeight,
-            // upper left
-            i*offset, barsViewHeight*pHeight
+            (i+1)*offset, height
         ]
+        // let barsViewHeight = this.canvasHeight()-this.barEndY-this.barStartY
+        // return [
+        //     //
+        //     // triangle 1
+        //     //
+        //     // lower left
+        //     i*offset, 0, 
+        //     // lower right
+        //     (i+1)*offset, 0,
+        //     // upper left
+        //     i*offset, barsViewHeight*pHeight,
+
+        //     // triangle 2
+        //     // lower right
+        //     (i+1)*offset, 0,
+        //     // upper right
+        //     (i+1)*offset, barsViewHeight*pHeight,
+        //     // upper left
+        //     i*offset, barsViewHeight*pHeight
+        // ]
     }
     
     highlight(barIndexList) {
         let lines = new Array()
+        var offset = (this.model.xMax - this.model.xMin)/this.model.nBins
         for(var i = 0; i < barIndexList.length; i++) {
-            lines = lines.concat(this.generateRectangleVertexPoints(barIndexList[i], (this.canvasWidth() - this.barStartX)/this.model.nBins, this.model.pBarsHeight[barIndexList[i]]))
+            lines = lines.concat(this.generateRectangleVertexPoints(barIndexList[i], offset, this.model.bars[barIndexList[i]]))
         }
-        this.render2d(new Float32Array(lines), {xMin: -this.barStartX, yMin: -this.barStartY, xMax: this.canvasWidth(), yMax: this.canvasHeight() - this.barStartY}, [0,0,0,1], this.gl.TRIANGLES)
+        //this.render2d(new Float32Array(lines), {xMin: -this.barStartX, yMin: -this.barStartY, xMax: this.canvasWidth() - this.barStartX, yMax: this.canvasHeight() - this.barStartY}, [0,0,0,1], this.gl.TRIANGLES, [this.barStartX, this.barStartY, this.canvasWidth() - this.barStartX, this.canvasHeight() - this.barStartY - this.barEndY])
+        this.render2d(new Float32Array(lines), {xMin: this.model.xMin, yMin: this.model.yMin, xMax: this.model.xMax, yMax:this.model.yMax}, [0,0,0,1], this.gl.TRIANGLES, [this.barStartX, this.barStartY, this.canvasWidth() - this.barStartX, this.canvasHeight() - this.barStartY - this.barEndY])
+
     }
     displayBarInfo(barIndexList) {
         // calcaulte start, end, sum, p_sum
