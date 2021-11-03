@@ -200,7 +200,41 @@ class VolView3d extends Canvas2dView
     }
 
     
+    getFacesGeometry( dims ) {
+        const corners = this.getBBoxCorners( dims );
+        const A = corners[ 0 ]
+        const B = corners[ 1 ]
+        const C = corners[ 2 ]
+        const D = corners[ 3 ]
 
+        const E = corners[ 4 ]
+        const F = corners[ 5 ]
+        const G = corners[ 6 ]
+        const H = corners[ 7 ]
+        var faces = new Float32Array([
+            // xz, y=0
+            A, B, E,
+            A, E, D,
+            // xz, y=1
+            C, H, F,
+            C, G, H,
+
+            // xy, z=0
+            C, F, A,
+            F, B, A,
+            // xy, z=1
+            D, E, G,
+            E, H, G,
+            
+            // yz, x=0
+            C, A, G,
+            A, D, G,
+            // yz, x=1
+            B, F, E,
+            F, H, E
+        ].flat(1))
+        return faces;
+    }
     getAxisGeometry( dims, slicePositions )
     {
         var xAxis = new Float32Array( [
