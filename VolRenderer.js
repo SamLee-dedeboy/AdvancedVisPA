@@ -295,6 +295,39 @@ const viewAlignedPlaneFsSrc =
 		//fragColor = color;
 		fragColor = vec4(color, opacity);
 	}`;
+const exitPointVsSrc = 
+`#version 300 es
+	in vec3 pos;
+	uniform mat4 MVP;
+	uniform float xDim;
+	uniform float yDim;
+	uniform float zDim;
+	
+	out vec3 texCoord;
+
+	void main(void) { 
+		texCoord = vec3(
+			pos.x/xDim,
+			pos.y/yDim,
+			pos.z/zDim
+		);
+		gl_Position = MVP * vec4(      
+			pos.x,
+			pos.y,                   
+			pos.z,                   
+			1.0                  
+		); 
+    }`;
+const exitPointFsSrc = 
+`#version 300 es
+precision highp float;
+
+out vec4 exitPoint;
+in vec3 texCoord;
+void main(void) {
+	//exitPoint = vec4(0.5,0.5,0.5,1);
+	 exitPoint = vec4(texCoord,1);
+}`;
 //////////////////////////////////////////////////////////////////////////////////
 
 class VolRenderer {
@@ -365,11 +398,11 @@ class VolRenderer {
         this.volTex = gl.createTexture();
         this.colTex = gl.createTexture();
         this.opcTex = gl.createTexture();        
-	
+		this.exitPointTexture = gl.createTexture();
+
         // buffers
-
+		this.renderTextureFrameBuffer = this.gl.createFramebuffer();
         this.vertexBuffer = this.gl.createBuffer();
-
         // shaders for simple 3d rendering (bounding boxes axis, etc)
 
         this.basicShaderProgram = this.compileShader( basicVs3dSrc, basicFs3dSrc );
@@ -383,7 +416,8 @@ class VolRenderer {
         this.textureBasedVolumeRenderShader = this.compileShader( viewAlignedPlaneInstancedVsSrc, viewAlignedPlaneInstancedFsSrc );
 
 		this.viewAlignedVolumeRenderShader = this.compileShader(viewAlignedPlaneVsSrc, viewAlignedPlaneFsSrc);
-        return this;
+        this.exitPointShaderProgram = this.compileShader(exitPointVsSrc, exitPointFsSrc)
+		return this;
 	}
 
 	render(  
@@ -431,7 +465,251 @@ class VolRenderer {
 		
 		gl.disableVertexAttribArray( posAttr );     
     }
+	renderRayCastingVolume(viewWidth,
+		viewHeight, 
+		cameraPosVec,
+		cameraUpVec,	
+		bboxFacesDataSpace,
+		bboxCornersWorldSpace,
+		dataSpaceToClipSpace,
+		worldSpaceToClipSpace,
+		worldSpaceToDataSpace,
+		dims,
+		doLighting,
+		sampleDistance) {
+			// construct and calculate all attributes
+			// vector pointing from (0,0,0) in world space to the camera position
+			var normalVec = glMatrix.vec3.create();
+			glMatrix.vec3.normalize( normalVec, cameraPosVec );
+			glMatrix.vec3.scale( normalVec, normalVec, 1.0 );
+			var translationDirection = normalVec;
+	
+	
+			var upVector = cameraUpVec;
+			glMatrix.vec3.normalize( upVector, upVector );
+	
+			// camera right vector
+			var rightVec = glMatrix.vec3.create();
+			glMatrix.vec3.cross( rightVec, upVector, normalVec );
+			glMatrix.vec3.normalize( rightVec, rightVec );
+			//console.log(sampleDistance)
+			var alphaScale = sampleDistance;
+			var maxDim = Math.max( Math.max( dims[ 0 ], dims[ 1 ] ), dims[ 2 ] );
+	
+			// the spacing between the planes in world space
+			// divide by maxDim, as this is the way our world space is normalized
+			var dt = sampleDistance / maxDim;
+			// the data is centered at (0,0,0) in worldspace, so distance to the camera is the length its position vector
+			var camDist = glMatrix.vec3.length( cameraPosVec );
+			
+			// wMax, wMin are the closest and furthest distances from the view aligned plane at the camera position
+			// dw is the distance in world space between the closest and furtherest corner of the bounding box
+			var wMax = -Infinity;
+			var wMin = Infinity;
+			var frontIndex = 0;
+			for(var i = 0; i < bboxCornersWorldSpace.length; i++) {
+				var distVec = glMatrix.vec3.create();
+				glMatrix.vec3.subtract(distVec, cameraPosVec, glMatrix.vec3.fromValues(bboxCornersWorldSpace[i][0], bboxCornersWorldSpace[i][1], bboxCornersWorldSpace[i][2]))
+				var dist = glMatrix.vec3.length(distVec);
+				if(dist > wMax) {
+					wMax = dist;
+				}
+				if(dist < wMin) {
+					wMin = dist;
+					frontIndex = i;
+				}
+			}
+			var dW = ( wMax - wMin );
+	
+			// the number of planes will be that distance divided by the spacing between planes
+			var NSample = dW / dt;
+			
+			// the amount of translation for the furthest plane (we're rendering back to front)
+			// wMax - camDist gives us the distance between the furthest point and the base plane
+			// we want to start this far back, so it is negative
+			var t0 = -( wMax - camDist );
+	
+		
+	
+			var bboxV2 = bboxCornersWorldSpace[2];
+			var bboxV3 = bboxCornersWorldSpace[3];
+			var lightWorldPosition = glMatrix.vec3.fromValues((bboxV2[0] + bboxV3[0])/2-1, (bboxV2[1] + bboxV3[1])/2, (bboxV2[2] + bboxV3[2])/2)
+			glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
+	
+			this.renderBackfaces(
+				viewWidth, 
+				viewHeight, 
+				bboxFacesDataSpace, 
+				dataSpaceToClipSpace, 
+				dims)
+			
+			return 
+			let gl = this.gl;
+			let sp = this.raycastingVolumeRenderShader;
+			
+			this.glCanvas.width  = viewWidth;
+			this.glCanvas.height = viewHeight;
+	
+			gl.viewport( 0, 0, viewWidth, viewHeight );
+			gl.useProgram(  this.cuttingPlaneShaderProgram );
+		
+	
+			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+			gl.bufferData( gl.ARRAY_BUFFER, Vin, gl.DYNAMIC_DRAW, 0 );
+	
+			gl.useProgram(  sp );
+	
+			gl.uniform1i( gl.getUniformLocation( sp, "volSampler" ), 0 );
+			gl.uniform1i( gl.getUniformLocation( sp, "colSampler" ), 1 );
+			gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
+	
+			gl.uniform3fv( gl.getUniformLocation( sp, "vecView" ), new Float32Array( translationDirection ) );
+			gl.uniform1f( gl.getUniformLocation( sp, "dt" ), dt );
+			//gl.uniform1i( gl.getUniformLocation( sp, "lastIndex" ), NSample-1 );
+			gl.uniform1f( gl.getUniformLocation( sp, "t0" ), t0 );
+	
+			gl.uniform3fv( gl.getUniformLocation( sp, "lightWorldPosition" ), new Float32Array( lightWorldPosition ) );
+			gl.uniform3fv( gl.getUniformLocation( sp, "camWorldPosition" ), new Float32Array( cameraPosVec ) );
+	
+			
+			gl.activeTexture( gl.TEXTURE0 );
+			gl.bindTexture( gl.TEXTURE_3D, this.volTex );
+	
+			gl.activeTexture( gl.TEXTURE1 );
+			gl.bindTexture( gl.TEXTURE_2D, this.colTex );
+	
+			gl.activeTexture( gl.TEXTURE2 );
+			gl.bindTexture( gl.TEXTURE_2D, this.opcTex );
+	
+			gl.uniform1f( gl.getUniformLocation( sp, "dataMin" ), this.dataMin );
+			gl.uniform1f( gl.getUniformLocation( sp, "dataMax" ), this.dataMax );
+	
+			gl.uniform1f( gl.getUniformLocation( sp, "xDim" ), dims[ 0 ] );
+			gl.uniform1f( gl.getUniformLocation( sp, "yDim" ), dims[ 1 ] );
+			gl.uniform1f( gl.getUniformLocation( sp, "zDim" ), dims[ 2 ] );
+	
+			gl.uniform1f( gl.getUniformLocation( sp, "alphaScale" ), alphaScale );
+			gl.uniform1i( gl.getUniformLocation( sp, "doLighting" ), doLighting ? 1 : 0 );
+	
+			gl.uniformMatrix4fv( 
+				gl.getUniformLocation( sp, "M_DATA_SPACE" ), 
+				false, 
+				worldSpaceToDataSpace ); 
+	
+			gl.uniformMatrix4fv( 
+				gl.getUniformLocation( sp, "M_CLIP_SPACE" ), 
+				false, 
+				worldSpaceToClipSpace ); 
+	
+			// TODO: other uniforms	
+			gl.uniform1iv(gl.getUniformLocation(sp,"nSequence"), nSequence);
+			gl.uniform1iv(gl.getUniformLocation(sp,"v1"), v1);
+			gl.uniform1iv(gl.getUniformLocation(sp,"v2"),  v2);
+			gl.uniform3fv(gl.getUniformLocation(sp,"vecVertices"), new Float32Array(bboxCornersWorldSpace.flat(1)));
+			gl.uniform1i(gl.getUniformLocation(sp,"frontIndex"), frontIndex);
+			
+			
+			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+	
+			var intersecAttr = gl.getAttribLocation( sp, "Vin" );
+	
+			gl.vertexAttribPointer( intersecAttr, 1, gl.FLOAT, false, 0, 0 );
+			gl.enableVertexAttribArray( intersecAttr );
+	
+	
+			gl.drawArraysInstanced(
+				gl.TRIANGLE_FAN, 
+				0, 
+				Vin.length-1, 
+				NSample );
+			// Vin = new Float32Array([
+			// 	0, 1, 2,
+			// 	0, 2, 3,
+			// 	0, 3, 4,
+			// 	0, 4, 5
+			// ])
+			// gl.drawArraysInstanced(
+			// gl.TRIANGLES, 
+			// 0, 
+			// Vin.length/3, 
+			// NSample );
+			gl.disableVertexAttribArray( intersecAttr );     
+	}
+	renderBackfaces(
+		viewWidth, 
+		viewHeight, 
+		surfaceVertices, 
+        dataSpaceToClipSpaceMatrix,
+		dims) 	
+	{
+		var gl = this.gl
 
+		this.glCanvas.width  = viewWidth;
+		this.glCanvas.height  = viewHeight;
+		this.setExitPointTexture(viewWidth, viewHeight);
+
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.renderTextureFrameBuffer);
+		gl.framebufferTexture2D( 
+			gl.FRAMEBUFFER, 
+			gl.COLOR_ATTACHMENT0,  
+			gl.TEXTURE_2D, 
+			this.exitPointTexture,
+			0)
+		// render 
+		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+			console.log("not working!")
+		}
+
+		var sp = this.exitPointShaderProgram
+		gl.useProgram(  sp );
+		gl.enable( gl.DEPTH_TEST );
+		gl.depthFunc( gl.LESS );
+		gl.disable( gl.BLEND );
+		gl.depthMask( true );
+
+		gl.enable(gl.CULL_FACE);
+		gl.cullFace(gl.FRONT)
+
+		gl.viewport( 0, 0, viewWidth, viewHeight );
+
+		
+		//gl.bufferData( gl.FRAMEBUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0 );
+
+		gl.uniformMatrix4fv( 
+			gl.getUniformLocation( sp, "MVP" ), 
+			false, 
+			dataSpaceToClipSpaceMatrix );		
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "xDim"),
+			dims[0]
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "yDim"),
+			dims[1]
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "zDim"),
+			dims[2]
+		)
+		gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture);
+
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+		gl.bufferData( gl.ARRAY_BUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0)
+		var posAttr = gl.getAttribLocation( sp, "pos" );
+		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
+		gl.enableVertexAttribArray( posAttr );
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.renderTextureFrameBuffer );
+
+		gl.drawArrays( 
+			gl.TRIANGLES, 
+			0, 
+			surfaceVertices.length / 3 );   
+		
+		// 
+		gl.disableVertexAttribArray( posAttr );  
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null)
+	}
+	
     // TODO --- INTEGRATE FROM A2
 	renderCuttingSurface( 
 		viewWidth, 
@@ -450,6 +728,8 @@ class VolRenderer {
 		gl.depthFunc( gl.LESS );
 		gl.disable( gl.BLEND );
 		gl.depthMask( true );
+
+
 		gl.activeTexture( gl.TEXTURE0 );
 		gl.bindTexture( gl.TEXTURE_3D, this.volTex );
 
@@ -1085,6 +1365,8 @@ class VolRenderer {
 		// 	colorAlphaTF[4*i+3] = a
 		// }
     	var gl = this.gl;
+		gl.activeTexture( gl.TEXTURE1 );
+
 		gl.bindTexture( gl.TEXTURE_2D, this.colTex );
 		//gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
 		gl.texImage2D(
@@ -1104,16 +1386,33 @@ class VolRenderer {
 		
 		return this;
 	}
-	requestCORSIfNotSameOrigin(img, url) {
-		if ((new URL(url, window.location.href)).origin !== window.location.origin) {
-		  img.crossOrigin = "";
-		}
-	  }
+	setExitPointTexture(width, height) {
+		var gl = this.gl
+
+		gl.activeTexture( gl.TEXTURE3 );
+		gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGBA32F, 
+			width, 
+			height, 
+			0, 
+			gl.RGBA,
+			gl.FLOAT,
+			null)
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+		return this
+	}
+	
 	setTF( colorTF, opacityTF )
 	{
 		this.setColorTF( colorTF, opacityTF );
 		this.setOpacityTF( opacityTF );
-
+		
 		return this;
 	}
 
