@@ -545,19 +545,18 @@ class TFView extends Widget
         let offset = canvas.width/(data.length/channels)
 		let width = offset
 		let height = canvas.height
+		var gradient = context.createLinearGradient(0,0, canvas.width,0);
 		for(var i = 0; i < data.length; i+=channels) {
-			var rgbStr = 'rgb('
+			var color = [0,0,0];
 			for(var j = 0; j < channels; j++) {
-				rgbStr += data[i+j]*255
-				if(j!=channels-1) {
-					rgbStr += ','
-				}
+				color[j] = Math.round(data[i+j]*255)
 			}
-		
-			rgbStr += ')'
-			context.fillStyle = rgbStr
-			context.fillRect((i/channels)*offset, 0, width, height)
+			gradient.addColorStop((i/channels)*offset/canvas.width, this.rgbToHex(color));
+			//context.fillStyle = rgbStr
+			//context.fillRect((i/channels)*offset, 0, width, height)
 		}
+		context.fillStyle = gradient;
+		context.fillRect(0,0,canvas.width, canvas.height);
 		context.restore()
 	}
 
@@ -821,6 +820,13 @@ class TFView extends Widget
 		ctx.drawImage(otherCanvas, 0, 0)
 		ctx.restore();
 	}
+	componentToHex(c) {
+		var hex = c.toString(16);
+		return hex.length == 1 ? "0" + hex : hex;
+	}
+	rgbToHex(color) {
+		return "#" + this.componentToHex(color[0]) + this.componentToHex(color[1]) + this.componentToHex(color[2]);
+	  }
     setSize( x, y )
     {
     	var oldSize = Object.assign( {}, this.getSize() );
