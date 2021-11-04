@@ -240,20 +240,20 @@ class HistogramView extends WebGLView {
         for(let i = 0; i < model.pBarsHeight.length; i++) {
             // generate vertex coordinates with generateRectangleVertexPoints()
             //lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.pBarsHeight[i]))
-            lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.bars[i]))
+            lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.bars[i], model.xMin))
         }
         return lines
     }
    
-    generateRectangleVertexPoints(i, offset, height) {
+    generateRectangleVertexPoints(i, offset, height, start) {
         return [
             // t1
-            i*offset, 0,
-            (i+1)*offset, 0,
-            i*offset, height,
-            i*offset, height,
-            (i+1)*offset, 0,
-            (i+1)*offset, height
+            i*offset + start, 0,
+            (i+1)*offset + start, 0,
+            i*offset + start, height,
+            i*offset + start, height,
+            (i+1)*offset + start, 0,
+            (i+1)*offset + start, height
         ]
         // let barsViewHeight = this.canvasHeight()-this.barEndY-this.barStartY
         // return [
