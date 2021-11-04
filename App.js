@@ -276,6 +276,7 @@ class App extends Widget {
 		if ( this.volumeCheckBox.isChecked() )
 		{
 			this.VolRenderer.setTransparent3DRenderState();
+			
 			// this.VolRenderer.renderTextureBasedVolume( 
 			// 	view.getSize().x, 
 			// 	view.getSize().y, 
@@ -287,12 +288,25 @@ class App extends Widget {
  			// 	dims,
 			// 	this.lightingCheckBox.isChecked(), 
 			// 	0.5 );
-			this.VolRenderer.renderViewAlignedCuttingPlanes( 
+			// this.VolRenderer.renderViewAlignedCuttingPlanes( 
+			// 	view.getSize().x, 
+			// 	view.getSize().y, 
+ 			//     view.getCameraPosition(),
+ 			// 	view.up(),
+ 			// 	view.bboxCornersWorldSpace( dims ),
+ 			// 	view.worldSpaceToClipSpace( dims ),
+ 			// 	view.worldSpaceToDataSpace( dims ),
+ 			// 	dims,
+			// 	this.lightingCheckBox.isChecked(), 
+			// 	0.25 );
+			this.VolRenderer.renderRayCastingVolume( 
 				view.getSize().x, 
 				view.getSize().y, 
  			    view.getCameraPosition(),
  				view.up(),
+				view.getFacesGeometry( dims ),
  				view.bboxCornersWorldSpace( dims ),
+				MVP,
  				view.worldSpaceToClipSpace( dims ),
  				view.worldSpaceToDataSpace( dims ),
  				dims,
@@ -385,13 +399,13 @@ class App extends Widget {
 		var dataMin = histModel.xMin;
 		var dataMax = histModel.xMax;
 
-	    this.VolRenderer.setData( 
-	    	this.data, 
-	    	this.metadata.dims, 
-	    	this.convertToFloat == true ? "FLOAT" : this.metadata.format, 
-	    	dataMin,  
-	        dataMax );
-
+		this.VolRenderer.setData( 
+			this.data, 
+			this.metadata.dims, 
+			this.convertToFloat == true ? "FLOAT" : this.metadata.format, 
+			dataMin,  
+			dataMax );
+		console.log(this.convertToFloat)
 		this.updateAll();
 	}
 
@@ -606,23 +620,23 @@ class App extends Widget {
 	           		}
 		            self.metadata.format = "SHORT";
 	        	}
-	        	else if( self.metadata.format == "BYTE" )
-	        	{
-	            	var dataIn = new Uint8Array( reader.result );
-	        		if( self.convertToFloat )
-	        		{
-		            	self.data = new Float32Array( dataIn.length );
-		            	for( var i = 0; i < dataIn.length; ++i )
-		            	{
-	 	            		self.data[ i ] = dataIn[ i ] / Math.pow( 2, 8 ) - 1;
-		            	}
-		            }
-		            else
-		            {
-		            	self.data = dataIn;
-		            }
-		            self.metadata.format = "BYTE";
-	        	}	        	
+				else if( self.metadata.format == "BYTE" )
+				{
+					var dataIn = new Uint8Array( reader.result );
+					if( self.convertToFloat )
+					{
+						self.data = new Float32Array( dataIn.length );
+						for( var i = 0; i < dataIn.length; ++i )
+						{
+							self.data[ i ] = dataIn[ i ] / Math.pow( 2, 8 ) - 1;
+						}
+					}
+					else
+					{
+						self.data = dataIn;
+					}
+					self.metadata.format = "BYTE";
+				}	        	
 	        	else
 	        	{
 	        		throw "Data format (" + self.metadata.format + ") not supported yet."

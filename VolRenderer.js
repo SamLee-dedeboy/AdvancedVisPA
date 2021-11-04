@@ -328,6 +328,78 @@ void main(void) {
 	//exitPoint = vec4(0.5,0.5,0.5,1);
 	 exitPoint = vec4(texCoord,1);
 }`;
+const rayCastingVsSrc = 
+`#version 300 es
+	in vec3 pos;
+	uniform mat4 M_DATA_TO_CLIP_SPACE;
+	uniform float xDim;
+	uniform float yDim;
+	uniform float zDim;
+	
+	out vec3 texCoord;
+
+	void main(void) { 
+		texCoord = vec3(
+			pos.x/xDim,
+			pos.y/yDim,
+			pos.z/zDim
+		);
+		gl_Position = M_DATA_TO_CLIP_SPACE * vec4(      
+			pos.x,
+			pos.y,                   
+			pos.z,                   
+			1.0                  
+		); 
+    }`;
+const rayCastingFsSrc = 
+`#version 300 es
+precision highp float;
+
+uniform highp sampler3D volSampler;
+uniform highp sampler2D exitPointSampler;
+uniform highp sampler2D colSampler;
+uniform highp sampler2D opcSampler;
+
+uniform float xDim;
+uniform float yDim;
+uniform float zDim;
+uniform float sampleDistance;
+uniform float dataMin;
+uniform float dataMax;
+uniform int width;
+uniform int height;
+out vec4 fragColor;
+in vec3 texCoord;
+void main(void) {
+	vec2 fragPos = gl_FragCoord.xy;
+	vec2 normalizedFragPos = fragPos / vec2(width, height);
+	vec3 entryPoint = texCoord;
+	vec3 exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+	vec3 dims = vec3(xDim, yDim, zDim);
+
+	vec3 fullRay = (exitPoint - entryPoint) * dims;
+	vec3 rayDirection = normalize(fullRay);
+
+	float totalDistance = length(fullRay);
+	int nSample = int(totalDistance/sampleDistance);
+	vec3 t0 = entryPoint * dims;
+	vec3 rayPos = t0;
+	vec3 dstColor = vec3(0,0,0);
+	float dstAlpha = 0.0;
+	vec3 newTexCoord = texCoord;
+	for(int i = 0; i < nSample; i++) {
+		newTexCoord = rayPos/dims;
+		float dataValue = texture(volSampler, newTexCoord).r;
+		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
+		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
+		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
+		dstAlpha += (1.0-dstAlpha)*opacity;
+		dstColor += (1.0-dstAlpha)*opacity*color;
+
+		rayPos += rayDirection * sampleDistance;
+	}
+	fragColor = vec4(dstColor, dstAlpha);
+}`;
 //////////////////////////////////////////////////////////////////////////////////
 
 class VolRenderer {
@@ -414,7 +486,7 @@ class VolRenderer {
         // TODO compile shader for rendering view aligned polygones for texture based volume rendering
         
         this.textureBasedVolumeRenderShader = this.compileShader( viewAlignedPlaneInstancedVsSrc, viewAlignedPlaneInstancedFsSrc );
-
+		this.raycastingVolumeRenderShader = this.compileShader(rayCastingVsSrc, rayCastingFsSrc);
 		this.viewAlignedVolumeRenderShader = this.compileShader(viewAlignedPlaneVsSrc, viewAlignedPlaneFsSrc);
         this.exitPointShaderProgram = this.compileShader(exitPointVsSrc, exitPointFsSrc)
 		return this;
@@ -521,7 +593,7 @@ class VolRenderer {
 			}
 			var dW = ( wMax - wMin );
 	
-			// the number of planes will be that distance divided by the spacing between planes
+			// the number of samples will be that distance divided by the spacing between planes
 			var NSample = dW / dt;
 			
 			// the amount of translation for the furthest plane (we're rendering back to front)
@@ -543,7 +615,6 @@ class VolRenderer {
 				dataSpaceToClipSpace, 
 				dims)
 			
-			return 
 			let gl = this.gl;
 			let sp = this.raycastingVolumeRenderShader;
 			
@@ -551,23 +622,34 @@ class VolRenderer {
 			this.glCanvas.height = viewHeight;
 	
 			gl.viewport( 0, 0, viewWidth, viewHeight );
-			gl.useProgram(  this.cuttingPlaneShaderProgram );
-		
+			gl.enable( gl.DEPTH_TEST );
+			gl.depthFunc( gl.LESS );
+			gl.depthMask( false );
+			gl.enable( gl.BLEND );
+			gl.blendFuncSeparate(
+				gl.SRC_ALPHA, 
+				gl.ONE_MINUS_SRC_ALPHA, 
+				gl.ONE,
+				gl.ONE_MINUS_SRC_ALPHA
+			);
+			
+			gl.enable(gl.CULL_FACE);
+			gl.cullFace(gl.BACK);
 	
 			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
-			gl.bufferData( gl.ARRAY_BUFFER, Vin, gl.DYNAMIC_DRAW, 0 );
+			gl.bufferData( gl.ARRAY_BUFFER, bboxFacesDataSpace, gl.DYNAMIC_DRAW, 0 );
 	
 			gl.useProgram(  sp );
-	
+			
 			gl.uniform1i( gl.getUniformLocation( sp, "volSampler" ), 0 );
 			gl.uniform1i( gl.getUniformLocation( sp, "colSampler" ), 1 );
 			gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
-	
-			gl.uniform3fv( gl.getUniformLocation( sp, "vecView" ), new Float32Array( translationDirection ) );
-			gl.uniform1f( gl.getUniformLocation( sp, "dt" ), dt );
-			//gl.uniform1i( gl.getUniformLocation( sp, "lastIndex" ), NSample-1 );
-			gl.uniform1f( gl.getUniformLocation( sp, "t0" ), t0 );
-	
+			gl.uniform1i( gl.getUniformLocation( sp, "exitPointSampler"), 3);
+			
+			gl.uniform1f( gl.getUniformLocation( sp, "sampleDistance" ), sampleDistance );
+			gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
+			gl.uniform1i( gl.getUniformLocation(sp, "height"), viewHeight);
+
 			gl.uniform3fv( gl.getUniformLocation( sp, "lightWorldPosition" ), new Float32Array( lightWorldPosition ) );
 			gl.uniform3fv( gl.getUniformLocation( sp, "camWorldPosition" ), new Float32Array( cameraPosVec ) );
 	
@@ -592,48 +674,36 @@ class VolRenderer {
 			gl.uniform1i( gl.getUniformLocation( sp, "doLighting" ), doLighting ? 1 : 0 );
 	
 			gl.uniformMatrix4fv( 
-				gl.getUniformLocation( sp, "M_DATA_SPACE" ), 
+				gl.getUniformLocation( sp, "M_WORLD_TO_DATA_SPACE" ), 
 				false, 
 				worldSpaceToDataSpace ); 
 	
 			gl.uniformMatrix4fv( 
-				gl.getUniformLocation( sp, "M_CLIP_SPACE" ), 
+				gl.getUniformLocation( sp, "M_WORLD_TO_CLIP_SPACE" ), 
 				false, 
 				worldSpaceToClipSpace ); 
-	
-			// TODO: other uniforms	
-			gl.uniform1iv(gl.getUniformLocation(sp,"nSequence"), nSequence);
-			gl.uniform1iv(gl.getUniformLocation(sp,"v1"), v1);
-			gl.uniform1iv(gl.getUniformLocation(sp,"v2"),  v2);
-			gl.uniform3fv(gl.getUniformLocation(sp,"vecVertices"), new Float32Array(bboxCornersWorldSpace.flat(1)));
-			gl.uniform1i(gl.getUniformLocation(sp,"frontIndex"), frontIndex);
+			gl.uniformMatrix4fv(
+				gl.getUniformLocation( sp, "M_DATA_TO_CLIP_SPACE"),
+				false,
+				dataSpaceToClipSpace );
+			
+			
 			
 			
 			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 	
-			var intersecAttr = gl.getAttribLocation( sp, "Vin" );
+			var posAttr = gl.getAttribLocation( sp, "pos" );
 	
-			gl.vertexAttribPointer( intersecAttr, 1, gl.FLOAT, false, 0, 0 );
-			gl.enableVertexAttribArray( intersecAttr );
+			gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
+			gl.enableVertexAttribArray( posAttr );
 	
 	
-			gl.drawArraysInstanced(
-				gl.TRIANGLE_FAN, 
+			gl.drawArrays(
+				gl.TRIANGLES, 
 				0, 
-				Vin.length-1, 
-				NSample );
-			// Vin = new Float32Array([
-			// 	0, 1, 2,
-			// 	0, 2, 3,
-			// 	0, 3, 4,
-			// 	0, 4, 5
-			// ])
-			// gl.drawArraysInstanced(
-			// gl.TRIANGLES, 
-			// 0, 
-			// Vin.length/3, 
-			// NSample );
-			gl.disableVertexAttribArray( intersecAttr );     
+				bboxFacesDataSpace.length/3, 
+			);
+			gl.disableVertexAttribArray( posAttr );     
 	}
 	renderBackfaces(
 		viewWidth, 
