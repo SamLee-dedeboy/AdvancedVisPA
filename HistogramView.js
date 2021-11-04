@@ -235,25 +235,25 @@ class HistogramView extends WebGLView {
     generateLines(model) {
         // calculate the width of each bin
         //let offset = (this.canvasWidth() - this.barStartX)/model.nBins
-        let offset = (this.model.xMax - this.model.xMin)/model.nBins
+        let offset = Math.abs((this.model.xMax - this.model.xMin))/model.nBins
         let lines = new Array()
         for(let i = 0; i < model.pBarsHeight.length; i++) {
             // generate vertex coordinates with generateRectangleVertexPoints()
             //lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.pBarsHeight[i]))
-            lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.bars[i]))
+            lines = lines.concat(this.generateRectangleVertexPoints(i, offset, model.bars[i], model.xMin))
         }
         return lines
     }
    
-    generateRectangleVertexPoints(i, offset, height) {
+    generateRectangleVertexPoints(i, offset, height, start) {
         return [
             // t1
-            i*offset, 0,
-            (i+1)*offset, 0,
-            i*offset, height,
-            i*offset, height,
-            (i+1)*offset, 0,
-            (i+1)*offset, height
+            i*offset + start, 0,
+            (i+1)*offset + start, 0,
+            i*offset + start, height,
+            i*offset + start, height,
+            (i+1)*offset + start, 0,
+            (i+1)*offset + start, height
         ]
         // let barsViewHeight = this.canvasHeight()-this.barEndY-this.barStartY
         // return [
@@ -279,7 +279,8 @@ class HistogramView extends WebGLView {
     
     highlight(barIndexList) {
         let lines = new Array()
-        var offset = (this.model.xMax - this.model.xMin)/this.model.nBins
+        var offset = Math.abs((this.model.xMax - this.model.xMin))/model.nBins
+
         for(var i = 0; i < barIndexList.length; i++) {
             lines = lines.concat(this.generateRectangleVertexPoints(barIndexList[i], offset, this.model.bars[barIndexList[i]]))
         }
