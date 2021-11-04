@@ -330,42 +330,26 @@ class VolRenderer {
 		
 		var gl = this.gl;
 
-		// gl.activeTexture( gl.TEXTURE1 );		
+		gl.activeTexture( gl.TEXTURE1 );		
 
-		// gl.bindTexture( gl.TEXTURE_2D, this.colTex );
-		// gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+		gl.bindTexture( gl.TEXTURE_2D, this.colTex );
+		gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
 
-		// gl.texImage2D(
-		// 	gl.TEXTURE_2D,     // texture type
-		//     0,                 // level
-		// 	gl.RGB32F,           // internalFormat
-		// 	colorTF.length/3,  // width
-		// 	1,                 // height
-		// 	0,                 // border
-		// 	gl.RGB,            // format
-		// 	gl.FLOAT,          // type
-		// 	new Float32Array( colorTF ));       // data
+		gl.texImage2D(
+			gl.TEXTURE_2D,     // texture type
+		    0,                 // level
+			gl.RGB32F,           // internalFormat
+			colorTF.length/3,  // width
+			1,                 // height
+			0,                 // border
+			gl.RGB,            // format
+			gl.FLOAT,          // type
+			new Float32Array( colorTF ));       // data
 
-		// gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
-		// gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
-        // gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
-		// gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
-		var texture = gl.createTexture();
-		gl.bindTexture(gl.TEXTURE_2D, texture);
-		
-		// Fill the texture with a 1x1 blue pixel.
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-					new Uint8Array([0, 0, 255, 255]));
-		
-		// Asynchronously load an image
-		var image = new Image();
-		image.src = "resources/xxs.png";
-		image.addEventListener('load', function() {
-		// Now that the image has loaded make copy it to the texture.
-			gl.bindTexture(gl.TEXTURE_2D, texture);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,gl.UNSIGNED_BYTE, image);
-			gl.generateMipmap(gl.TEXTURE_2D);
-		});
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+        gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
 
 		return this;
 	}

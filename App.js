@@ -689,52 +689,52 @@ class App extends Widget {
 	    this.updateAll();
 	    return this;
     }
-	// beginDefault()
-    // {
-    //     var dataMin = -1;
-    //     var dataMax =  1;
+	beginDefault()
+    {
+        var dataMin = -1;
+        var dataMax =  1;
 
-    //     var dims = [  100, 100, 100 ]
-    //     this.data = new Float32Array( dims[ 0 ] * dims[ 1 ] *  dims [2 ] );
+        var dims = [  100, 100, 100 ]
+        this.data = new Float32Array( dims[ 0 ] * dims[ 1 ] *  dims [2 ] );
         
-    //     var flatIndex3d = function( i, j, k, dims )
-    //     {
-    //         return i + j * dims[ 0 ] + k * dims[ 0 ] * dims[ 1 ]; 
-    //     }
+        var flatIndex3d = function( i, j, k, dims )
+        {
+            return i + j * dims[ 0 ] + k * dims[ 0 ] * dims[ 1 ]; 
+        }
 
-    //     for( var i = 0; i < dims[ 0 ]; ++i ) {
-    //         for( var j = 0; j < dims[ 1 ]; ++j ) {
-    //             for( var k = 0; k < dims[ 2 ]; ++k ) {
-    //                 var di = i - dims[ 0 ] / 2;
-    //                 var dj = j - dims[ 1 ] / 2;
-    //                 var dk = k - dims[ 2 ] / 2;         
-    //                 var radius = Math.sqrt( di * di + dj * dj + dk*dk );
-    //                 this.data[ flatIndex3d( i, j, k, dims ) ] = Math.sin( radius + di + dj );
-    //             }
-    //         }
-    //     }
+        for( var i = 0; i < dims[ 0 ]; ++i ) {
+            for( var j = 0; j < dims[ 1 ]; ++j ) {
+                for( var k = 0; k < dims[ 2 ]; ++k ) {
+                    var di = i - dims[ 0 ] / 2;
+                    var dj = j - dims[ 1 ] / 2;
+                    var dk = k - dims[ 2 ] / 2;         
+                    var radius = Math.sqrt( di * di + dj * dj + dk*dk );
+                    this.data[ flatIndex3d( i, j, k, dims ) ] = Math.sin( radius + di + dj );
+                }
+            }
+        }
 
-    //     var histModel = new HistogramModel( this.data, 256 );
-    //     this.histogramView.set( histModel );
+        var histModel = new HistogramModel( this.data, 256 );
+        this.histogramView.set( histModel );
 
-    //     this.readMetadata = true; 
-    //     this.readBinary = true;
+        this.readMetadata = true; 
+        this.readBinary = true;
 
-    //     this.metadata = {
-    //         "dims"   : dims,
-    //         "format" : "FLOAT",
-    //         "name"   : "artificial"
-    //     };
+        this.metadata = {
+            "dims"   : dims,
+            "format" : "FLOAT",
+            "name"   : "artificial"
+        };
 
-    //     this.metaDataView.set( this.metadata );
+        this.metaDataView.set( this.metadata );
 
-    //     this.VolRenderer.setData( 
-    //         this.data, 
-    //         dims, 
-    //         "FLOAT", 
-    //         dataMin,  
-    //         dataMax );
+        this.VolRenderer.setData( 
+            this.data, 
+            dims, 
+            "FLOAT", 
+            dataMin,  
+            dataMax );
 
-    //     this.updateAll();
-    // }
+        this.updateAll();
+    }
 }
