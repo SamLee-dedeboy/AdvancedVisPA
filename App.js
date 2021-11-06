@@ -309,9 +309,10 @@ class App extends Widget {
 				MVP,
  				view.worldSpaceToClipSpace( dims ),
  				view.worldSpaceToDataSpace( dims ),
+				view.dataSpaceToWorldSpace( dims ),
  				dims,
 				this.lightingCheckBox.isChecked(), 
-				0.25 );
+				1 );
 		}
 
 		view.clear();

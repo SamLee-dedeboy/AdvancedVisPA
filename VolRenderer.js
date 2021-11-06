@@ -323,6 +323,7 @@ const exitPointFsSrc =
 precision highp float;
 
 out vec4 exitPoint;
+
 in vec3 texCoord;
 void main(void) {
 	//exitPoint = vec4(0.5,0.5,0.5,1);
@@ -335,9 +336,11 @@ const rayCastingVsSrc =
 	uniform float xDim;
 	uniform float yDim;
 	uniform float zDim;
-	
-	out vec3 texCoord;
 
+
+	out vec3 texCoord;
+	out vec3 v_surfaceToLight;
+	out vec3 v_surfaceToCam;
 	void main(void) { 
 		texCoord = vec3(
 			pos.x/xDim,
@@ -350,6 +353,7 @@ const rayCastingVsSrc =
 			pos.z,                   
 			1.0                  
 		); 
+
     }`;
 const rayCastingFsSrc = 
 `#version 300 es
@@ -368,6 +372,16 @@ uniform float dataMin;
 uniform float dataMax;
 uniform int width;
 uniform int height;
+
+uniform mat4 M_WORLD_TO_DATA_SPACE;
+uniform mat4 M_DATA_TO_WORLD_SPACE;
+// lighting
+uniform vec3 lightWorldPosition;
+uniform vec3 camWorldPosition;
+uniform int doLighting;
+uniform float alphaScale;
+
+
 out vec4 fragColor;
 in vec3 texCoord;
 void main(void) {
@@ -375,30 +389,132 @@ void main(void) {
 	vec2 normalizedFragPos = fragPos / vec2(width, height);
 	vec3 entryPoint = texCoord;
 	vec3 exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+	
+	// constant params
 	vec3 dims = vec3(xDim, yDim, zDim);
-
 	vec3 fullRay = (exitPoint - entryPoint) * dims;
 	vec3 rayDirection = normalize(fullRay);
-
 	float totalDistance = length(fullRay);
 	int nSample = int(totalDistance/sampleDistance);
 	vec3 t0 = entryPoint * dims;
+	float h_x = 1.0/xDim;
+	float h_y = 1.0/yDim;
+	float h_z = 1.0/zDim;
+
+	// variable params
 	vec3 rayPos = t0;
-	vec3 dstColor = vec3(0,0,0);
+	vec3 dstColor = vec3(0.0, 0.0, 0.0);
 	float dstAlpha = 0.0;
 	vec3 newTexCoord = texCoord;
 	for(int i = 0; i < nSample; i++) {
 		newTexCoord = rayPos/dims;
+		float light = 1.0;
+		float specular = 0.0;
+		if(doLighting == 1) {
+			float v_normal_x = 
+				texture(volSampler, vec3(
+					newTexCoord.x + h_x,
+					newTexCoord.y,
+					newTexCoord.z
+				)).r 
+				-
+				texture(volSampler, vec3(
+					newTexCoord.x - h_x,
+					newTexCoord.y,
+					newTexCoord.z
+				)).r;
+			float v_normal_y = 
+				texture(volSampler, vec3(
+					newTexCoord.x,
+					newTexCoord.y + h_y,
+					newTexCoord.z
+				)).r 
+				-
+				texture(volSampler, vec3(
+					newTexCoord.x,
+					newTexCoord.y - h_y,
+					newTexCoord.z
+				)).r;
+			float v_normal_z = 
+				texture(volSampler, vec3(
+					newTexCoord.x,
+					newTexCoord.y,
+					newTexCoord.z + h_z
+				)).r 
+				-
+				texture(volSampler, vec3(
+					newTexCoord.x,
+					newTexCoord.y,
+					newTexCoord.z - h_z
+				)).r;
+			
+			// sample point world space pos
+			vec3 sampleWorldSpace = (M_DATA_TO_WORLD_SPACE * vec4(
+				newTexCoord.x,
+				newTexCoord.y,
+				newTexCoord.z,
+				1.0
+			)).xyz;
+
+			// normal
+			vec3 v_normal = vec3(v_normal_x, v_normal_y, v_normal_z);
+			
+			vec3 normal = normalize(v_normal);
+			
+			if(v_normal.x == 0.0 && v_normal.y == 0.0 && v_normal.z == 0.0) {
+				normal = vec3(0,0,0);			
+			}
+
+			
+			// light dir
+			vec3 v_surfaceToLight =  sampleWorldSpace - lightWorldPosition;
+			vec3 surfaceToLightDirection = normalize(v_surfaceToLight);
+			
+			// cam dir
+			vec3 v_surfaceToCam = sampleWorldSpace - camWorldPosition;
+			vec3 surfaceToCamDirection = normalize(v_surfaceToCam);
+			
+			// half vec
+			vec3 halfVector = normalize(surfaceToLightDirection + surfaceToCamDirection);
+			
+			// light & spec
+
+			light = dot(normal, surfaceToLightDirection );
+			specular = dot(normal, halfVector);
+			if(light < 0.0) {
+				light = 0.0;
+			}
+		}
+
 		float dataValue = texture(volSampler, newTexCoord).r;
 		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
 		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
 		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
-		dstAlpha += (1.0-dstAlpha)*opacity;
-		dstColor += (1.0-dstAlpha)*opacity*color;
 
+		
+
+		// do lighting
+		color *= light;
+		color += specular;
+	
+		float unitDist = 1.0;
+
+		// correction
+		float srcAlphaCorrected = 1.0 - pow(1.0 - opacity, sampleDistance / unitDist);
+		vec3 srcColorCorrected =  color *  opacity * ( sampleDistance / unitDist );
+		
+
+		// composite
+		dstAlpha += (1.0 - dstAlpha) * srcAlphaCorrected;
+		dstColor += (1.0 - dstAlpha) * srcColorCorrected;
+		
+		// move forward
 		rayPos += rayDirection * sampleDistance;
-	}
+	}	
+	
 	fragColor = vec4(dstColor, dstAlpha);
+
+
 }`;
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -546,6 +662,7 @@ class VolRenderer {
 		dataSpaceToClipSpace,
 		worldSpaceToClipSpace,
 		worldSpaceToDataSpace,
+		dataSpaceToWorldSpace,
 		dims,
 		doLighting,
 		sampleDistance) {
@@ -554,17 +671,8 @@ class VolRenderer {
 			var normalVec = glMatrix.vec3.create();
 			glMatrix.vec3.normalize( normalVec, cameraPosVec );
 			glMatrix.vec3.scale( normalVec, normalVec, 1.0 );
-			var translationDirection = normalVec;
 	
 	
-			var upVector = cameraUpVec;
-			glMatrix.vec3.normalize( upVector, upVector );
-	
-			// camera right vector
-			var rightVec = glMatrix.vec3.create();
-			glMatrix.vec3.cross( rightVec, upVector, normalVec );
-			glMatrix.vec3.normalize( rightVec, rightVec );
-			//console.log(sampleDistance)
 			var alphaScale = sampleDistance;
 			var maxDim = Math.max( Math.max( dims[ 0 ], dims[ 1 ] ), dims[ 2 ] );
 	
@@ -578,36 +686,16 @@ class VolRenderer {
 			// dw is the distance in world space between the closest and furtherest corner of the bounding box
 			var wMax = -Infinity;
 			var wMin = Infinity;
-			var frontIndex = 0;
-			for(var i = 0; i < bboxCornersWorldSpace.length; i++) {
-				var distVec = glMatrix.vec3.create();
-				glMatrix.vec3.subtract(distVec, cameraPosVec, glMatrix.vec3.fromValues(bboxCornersWorldSpace[i][0], bboxCornersWorldSpace[i][1], bboxCornersWorldSpace[i][2]))
-				var dist = glMatrix.vec3.length(distVec);
-				if(dist > wMax) {
-					wMax = dist;
-				}
-				if(dist < wMin) {
-					wMin = dist;
-					frontIndex = i;
-				}
-			}
 			var dW = ( wMax - wMin );
 	
-			// the number of samples will be that distance divided by the spacing between planes
-			var NSample = dW / dt;
 			
-			// the amount of translation for the furthest plane (we're rendering back to front)
-			// wMax - camDist gives us the distance between the furthest point and the base plane
-			// we want to start this far back, so it is negative
-			var t0 = -( wMax - camDist );
-	
-		
-	
+			// light pos
 			var bboxV2 = bboxCornersWorldSpace[2];
 			var bboxV3 = bboxCornersWorldSpace[3];
 			var lightWorldPosition = glMatrix.vec3.fromValues((bboxV2[0] + bboxV3[0])/2-1, (bboxV2[1] + bboxV3[1])/2, (bboxV2[2] + bboxV3[2])/2)
-			glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
+			//glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
 	
+			// render
 			this.renderBackfaces(
 				viewWidth, 
 				viewHeight, 
@@ -622,16 +710,16 @@ class VolRenderer {
 			this.glCanvas.height = viewHeight;
 	
 			gl.viewport( 0, 0, viewWidth, viewHeight );
-			gl.enable( gl.DEPTH_TEST );
-			gl.depthFunc( gl.LESS );
-			gl.depthMask( false );
-			gl.enable( gl.BLEND );
-			gl.blendFuncSeparate(
-				gl.SRC_ALPHA, 
-				gl.ONE_MINUS_SRC_ALPHA, 
-				gl.ONE,
-				gl.ONE_MINUS_SRC_ALPHA
-			);
+			// gl.enable( gl.DEPTH_TEST );
+			// gl.depthFunc( gl.LESS );
+			// gl.depthMask( false );
+			// gl.enable( gl.BLEND );
+			// gl.blendFuncSeparate(
+			// 	gl.SRC_ALPHA, 
+			// 	gl.ONE_MINUS_SRC_ALPHA, 
+			// 	gl.ONE,
+			// 	gl.ONE_MINUS_SRC_ALPHA
+			// );
 			
 			gl.enable(gl.CULL_FACE);
 			gl.cullFace(gl.BACK);
@@ -686,12 +774,15 @@ class VolRenderer {
 				gl.getUniformLocation( sp, "M_DATA_TO_CLIP_SPACE"),
 				false,
 				dataSpaceToClipSpace );
-			
+			gl.uniformMatrix4fv(
+				gl.getUniformLocation( sp, "M_DATA_TO_WORLD_SPACE"),
+				false,
+				dataSpaceToWorldSpace );
 			
 			
 			
 			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
-	
+			gl.bindFramebuffer( gl.FRAMEBUFFER, null );
 			var posAttr = gl.getAttribLocation( sp, "pos" );
 	
 			gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
@@ -732,10 +823,10 @@ class VolRenderer {
 
 		var sp = this.exitPointShaderProgram
 		gl.useProgram(  sp );
-		gl.enable( gl.DEPTH_TEST );
-		gl.depthFunc( gl.LESS );
-		gl.disable( gl.BLEND );
-		gl.depthMask( true );
+		// gl.enable( gl.DEPTH_TEST );
+		// gl.depthFunc( gl.LESS );
+		// gl.disable( gl.BLEND );
+		// gl.depthMask( true );
 
 		gl.enable(gl.CULL_FACE);
 		gl.cullFace(gl.FRONT)
