@@ -450,9 +450,9 @@ void main(void) {
 			
 			// sample point world space pos
 			vec3 sampleWorldSpace = (M_DATA_TO_WORLD_SPACE * vec4(
-				newTexCoord.x,
-				newTexCoord.y,
-				newTexCoord.z,
+				rayPos.x,
+				rayPos.y,
+				rayPos.z,
 				1.0
 			)).xyz;
 
@@ -653,10 +653,10 @@ class VolRenderer {
 		
 		gl.disableVertexAttribArray( posAttr );     
     }
-	renderRayCastingVolume(viewWidth,
+	renderRayCastingVolume(
+		viewWidth,
 		viewHeight, 
 		cameraPosVec,
-		cameraUpVec,	
 		bboxFacesDataSpace,
 		bboxCornersWorldSpace,
 		dataSpaceToClipSpace,
@@ -665,6 +665,7 @@ class VolRenderer {
 		dataSpaceToWorldSpace,
 		dims,
 		doLighting,
+		lightPosWorldSpace = [0,0,0],
 		sampleDistance) {
 			// construct and calculate all attributes
 			// vector pointing from (0,0,0) in world space to the camera position
@@ -690,9 +691,8 @@ class VolRenderer {
 	
 			
 			// light pos
-			var bboxV2 = bboxCornersWorldSpace[2];
-			var bboxV3 = bboxCornersWorldSpace[3];
-			var lightWorldPosition = glMatrix.vec3.fromValues((bboxV2[0] + bboxV3[0])/2-1, (bboxV2[1] + bboxV3[1])/2, (bboxV2[2] + bboxV3[2])/2)
+			var lightWorldPosition = glMatrix.vec3.fromValues(lightPosWorldSpace[0], lightPosWorldSpace[1], lightPosWorldSpace[2])
+			console.log(lightWorldPosition)
 			//glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
 	
 			// render
