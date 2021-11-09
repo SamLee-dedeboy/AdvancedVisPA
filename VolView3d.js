@@ -13,11 +13,65 @@ class VolView3d extends Canvas2dView
         this.cameraControls.enablePan = true;
         this.cameraControls.staticMoving = true;
 
+        this.lightPosX = new MyRangeSlider(
+            "LightPositionControllerX",
+            this.getSelector(),
+            "X",
+            0,
+            255,
+            1,
+            this.getPosition().x,
+            this.getPosition().y,
+            200,
+            50)
+            .setHasBorder( false )
+            .setColor("white")
+            .setValue(0)
+
+        this.lightPosY = new MyRangeSlider(
+            "LightPositionControllerY",
+            this.getSelector(),
+            "Y",
+            0,
+            255,
+            1,
+            this.getPosition().x,
+            this.lightPosX.getPosition().y + this.lightPosX.getSize().y,
+            200,
+            50)
+            .setHasBorder( false )
+            .setColor("white")
+            .setValue(0)
+        this.lightPosZ = new MyRangeSlider(
+            "LightPositionControllerZ",
+            this.getSelector(),
+            "Z",
+            0,
+            255,
+            1,
+            this.getPosition().x,
+            this.lightPosY.getPosition().y + this.lightPosY.getSize().y,
+            200,
+            50).setHasBorder( false )
+            .setColor("white")
+            .setValue(0)
+
+        
+
+        
         this.mouseDown = false;
         var self = this;
 
         var c = document.querySelector( this.getSelector() );
-
+        this.lightPosX.getSlider().addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changed"));
+        }, false);
+        this.lightPosY.getSlider().addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changed"));
+        }, false);
+        this.lightPosZ.getSlider().addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changed"));
+        }, false);
         this.canvas.addEventListener('mousedown', function (event) {
             self.mouseDown = true;    
         }, false);
@@ -234,6 +288,16 @@ class VolView3d extends Canvas2dView
             F, H, E
         ].flat(1))
         return faces;
+    }
+    getLightPositionDataSpace() {
+        return [Math.round(this.lightPosX.getValue()), Math.round(this.lightPosY.getValue()), Math.round(this.lightPosZ.getValue())]
+    }
+    getLightPositionWorldSpace(dims) {
+        var lightPos = this.getLightPositionDataSpace()
+        
+        lightPos = this.dataSpacePositionToWorldSpaceVector( dims, lightPos );
+        
+        return lightPos;
     }
     getAxisGeometry( dims, slicePositions )
     {

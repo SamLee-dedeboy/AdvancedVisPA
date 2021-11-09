@@ -79,6 +79,10 @@ class Canvas2dView extends Widget {
 
     renderText( text, color, xy )
     {
+        if(text == 'light') {
+            console.log(xy)
+
+        }
         this.context.save();
         this.context.font = 'bold 14px helvetica';
         this.context.textAlign = "center";  

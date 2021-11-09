@@ -67,13 +67,18 @@ class MyRangeSlider extends Widget {
         return this.slider
     }
     setColor(color) {
-        this.value.style.color = color
+        this.valueElement.style.color = color
         this.titleElement.style.color = color
+        return this
+    }
+    getValue() {
+        return this.value;
     }
     setValue(value) {
         this.valueElement.innerHTML = value
         this.slider.value = value
         this.value = value
+        return this
     }
     getMin() {
         return this.min;

@@ -303,7 +303,6 @@ class App extends Widget {
 				view.getSize().x, 
 				view.getSize().y, 
  			    view.getCameraPosition(),
- 				view.up(),
 				view.getFacesGeometry( dims ),
  				view.bboxCornersWorldSpace( dims ),
 				MVP,
@@ -312,12 +311,17 @@ class App extends Widget {
 				view.dataSpaceToWorldSpace( dims ),
  				dims,
 				this.lightingCheckBox.isChecked(), 
+				view.getLightPositionWorldSpace(dims),
 				1 );
 		}
-
+	
 		view.clear();
 	    view.render( this.VolRenderer.getCanvas() );	
-
+		view.renderText(	
+			"light" ,
+			'rgb(255,255,255)',
+			view.dataSpacePositionToScreenSpacePos(dims, new Float32Array(view.getLightPositionDataSpace()))
+		)
 		if( this.annoCheckBox.isChecked()  )
 		{
             var ds = [ dx,   dy,  dz ];
@@ -346,15 +350,6 @@ class App extends Widget {
 				view.dataSpacePositionToScreenSpacePos( dims, [ -10, -10, -10 ] ) );      
 			                
 		}
-		var bboxCornersDataSpace = view.getBBoxCorners( dims );
-		var v2 = bboxCornersDataSpace[2];
-		var v3 = bboxCornersDataSpace[3];
-		var mid = glMatrix.vec3.fromValues((v2[0] + v3[0])/2-dims[0]/2, (v2[1] + v3[1])/2, (v2[2] + v3[2])/2)
-		view.renderText(	
-			"light" ,
-			'rgb(255,255,255)',
-			view.dataSpacePositionToScreenSpacePos(dims, new Float32Array(mid))
-		)
 		// for(var cornerIndex = 0; cornerIndex < bboxCornersDataSpace.length; cornerIndex++) {
 		// 	view.renderText(
 		// 		"v" + cornerIndex,
