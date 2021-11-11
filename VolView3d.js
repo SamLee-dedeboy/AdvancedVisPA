@@ -55,14 +55,30 @@ class VolView3d extends Canvas2dView
             50).setHasBorder( false )
             .setColor("white")
             .setValue(0)
+        var c = document.querySelector( this.getSelector() );
 
-        
-
+        var colorPickerTitleElement = document.createElement("span");
+        colorPickerTitleElement.textContent = "Color";
+        colorPickerTitleElement.style.position = "relative";
+        colorPickerTitleElement.style.color = "white";
+        colorPickerTitleElement.style.left = this.lightPosZ.getPosition().x + 10 + "px";
+        colorPickerTitleElement.style.top = this.lightPosZ.getPosition().y + this.lightPosZ.getSize().y + "px";
+        var colorPickerElement = document.createElement("input");
+        colorPickerElement.setAttribute("type", "color");
+        colorPickerElement.setAttribute("id", "lightSourceColorPicker")
+        colorPickerElement.value = "#ffffff";
+        colorPickerElement.style.position = "relative";
+        colorPickerElement.style.left = this.lightPosZ.getPosition().x + 20 + "px";
+        colorPickerElement.style.top = this.lightPosZ.getPosition().y + this.lightPosZ.getSize().y + "px";
+        colorPickerElement.style.width = 120 + "px";
+        colorPickerElement.style.height = 30; + "px"
+        c.append(colorPickerTitleElement);
+        c.append(colorPickerElement);
         
         this.mouseDown = false;
         var self = this;
 
-        var c = document.querySelector( this.getSelector() );
+        
         this.lightPosX.getSlider().addEventListener('input', function(event) {
             c.dispatchEvent(new Event("changed"));
         }, false);
@@ -70,6 +86,9 @@ class VolView3d extends Canvas2dView
             c.dispatchEvent(new Event("changed"));
         }, false);
         this.lightPosZ.getSlider().addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changed"));
+        }, false);
+        colorPickerElement.addEventListener("input", function(event) {
             c.dispatchEvent(new Event("changed"));
         }, false);
         this.canvas.addEventListener('mousedown', function (event) {
@@ -94,7 +113,34 @@ class VolView3d extends Canvas2dView
 
         return this;
     }
+    setLightSource(dims) {
+        this.lightPosX
+        .setMin(-dims[0])
+        .setMax(dims[0] * 2);
 
+        this.lightPosY
+        .setMin(-dims[1])
+        .setMax(dims[1] * 2);
+
+        this.lightPosZ
+        .setMin(-dims[2])
+        .setMax(dims[2] * 2);
+
+    }
+    hexToRGB(hex) {
+		var r = parseInt(hex.slice(1, 3), 16),
+			g = parseInt(hex.slice(3, 5), 16),
+			b = parseInt(hex.slice(5, 7), 16);
+	
+			return [r/255,g/255,b/255, 1.0]
+			//return "rgb(" + r + ", " + g + ", " + b + ")";
+		
+	}
+    getLightColor() {
+        var hexColor = document.getElementById("lightSourceColorPicker").value
+        var color = this.hexToRGB(hexColor);
+        return color
+    }
     setSize( width, height )
     {
         super.setSize( width, height );

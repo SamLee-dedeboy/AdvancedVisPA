@@ -5,6 +5,7 @@ const basicVs3dSrc =
   `#version 300 es
    in vec3 pos;
    uniform mat4 MVP;
+   uniform float pointSize;
    void main(void) {            
         gl_Position = MVP * vec4(      
            pos.x,
@@ -12,6 +13,7 @@ const basicVs3dSrc =
            pos.z,                   
            1.0                  
         ); 
+		gl_PointSize = pointSize;
     }`;
 
 const basicFs3dSrc = 
@@ -378,12 +380,65 @@ uniform mat4 M_DATA_TO_WORLD_SPACE;
 // lighting
 uniform vec3 lightWorldPosition;
 uniform vec3 camWorldPosition;
+uniform vec3 lightColor;
 uniform int doLighting;
-uniform float alphaScale;
 
 
 out vec4 fragColor;
 in vec3 texCoord;
+
+vec3 centralDifferenceNormal(vec3 texCoord) {
+	float h_x = 1.0/xDim;
+	float h_y = 1.0/yDim;
+	float h_z = 1.0/zDim;
+	float v_normal_x = 
+		texture(volSampler, vec3(
+			texCoord.x + h_x,
+			texCoord.y,
+			texCoord.z
+		)).r 
+		-
+		texture(volSampler, vec3(
+			texCoord.x - h_x,
+			texCoord.y,
+			texCoord.z
+		)).r;
+	float v_normal_y = 
+		texture(volSampler, vec3(
+			texCoord.x,
+			texCoord.y + h_y,
+			texCoord.z
+		)).r 
+		-
+		texture(volSampler, vec3(
+			texCoord.x,
+			texCoord.y - h_y,
+			texCoord.z
+		)).r;
+	float v_normal_z = 
+		texture(volSampler, vec3(
+			texCoord.x,
+			texCoord.y,
+			texCoord.z + h_z
+		)).r 
+		-
+		texture(volSampler, vec3(
+			texCoord.x,
+			texCoord.y,
+			texCoord.z - h_z
+		)).r;
+
+	// normal
+	vec3 v_normal = vec3(v_normal_x, v_normal_y, v_normal_z);
+
+	vec3 normal = normalize(v_normal);
+
+	// if(v_normal.x == 0.0 && v_normal.y == 0.0 && v_normal.z == 0.0) {
+	// 	normal = vec3(0,0,0);			
+	// }
+
+	return normal;
+}
 void main(void) {
 	vec2 fragPos = gl_FragCoord.xy;
 	vec2 normalizedFragPos = fragPos / vec2(width, height);
@@ -397,9 +452,6 @@ void main(void) {
 	float totalDistance = length(fullRay);
 	int nSample = int(totalDistance/sampleDistance);
 	vec3 t0 = entryPoint * dims;
-	float h_x = 1.0/xDim;
-	float h_y = 1.0/yDim;
-	float h_z = 1.0/zDim;
 
 	// variable params
 	vec3 rayPos = t0;
@@ -408,46 +460,42 @@ void main(void) {
 	vec3 newTexCoord = texCoord;
 	for(int i = 0; i < nSample; i++) {
 		newTexCoord = rayPos/dims;
-		float light = 1.0;
-		float specular = 0.0;
+		float dataValue = texture(volSampler, newTexCoord).r;
+		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
+		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
+		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
+
 		if(doLighting == 1) {
-			float v_normal_x = 
-				texture(volSampler, vec3(
-					newTexCoord.x + h_x,
-					newTexCoord.y,
-					newTexCoord.z
-				)).r 
-				-
-				texture(volSampler, vec3(
-					newTexCoord.x - h_x,
-					newTexCoord.y,
-					newTexCoord.z
-				)).r;
-			float v_normal_y = 
-				texture(volSampler, vec3(
-					newTexCoord.x,
-					newTexCoord.y + h_y,
-					newTexCoord.z
-				)).r 
-				-
-				texture(volSampler, vec3(
-					newTexCoord.x,
-					newTexCoord.y - h_y,
-					newTexCoord.z
-				)).r;
-			float v_normal_z = 
-				texture(volSampler, vec3(
-					newTexCoord.x,
-					newTexCoord.y,
-					newTexCoord.z + h_z
-				)).r 
-				-
-				texture(volSampler, vec3(
-					newTexCoord.x,
-					newTexCoord.y,
-					newTexCoord.z - h_z
-				)).r;
-			
+
+			vec3 Ia = vec3( 1.0, 1.0, 1.0 );
+
+			//  diffuse light color
+			vec3 Id = lightColor;
+
+			//  specular light color
+			vec3 Is = lightColor;                
+
+			//  ambient material color
+			vec3 Ma = color;
+
+			//  diffuse material color
+			vec3 Md = color;
+
+			// specular material color
+			vec3 Ms = lightColor;
+
+			// amount of ambient light
+			float Ka = 0.5;
+
+			// amount of diffuse light
+			float Kd = 0.8;
+
+			// amount of specular light
+			float Ks = 0.8;
+				
+			// shininess of material, affects specular lighting
+			float shininess = 20.0;
+
 			// sample point world space pos
 			vec3 sampleWorldSpace = (M_DATA_TO_WORLD_SPACE * vec4(
 				rayPos.x,
@@ -456,16 +504,8 @@ void main(void) {
 				1.0
 			)).xyz;
 
-			// normal
-			vec3 v_normal = vec3(v_normal_x, v_normal_y, v_normal_z);
-			
-			vec3 normal = normalize(v_normal);
-			
-			if(v_normal.x == 0.0 && v_normal.y == 0.0 && v_normal.z == 0.0) {
-				normal = vec3(0,0,0);			
-			}
+			vec3 normal = centralDifferenceNormal(newTexCoord);
 
-			
 			// light dir
 			vec3 v_surfaceToLight =  sampleWorldSpace - lightWorldPosition;
 			vec3 surfaceToLightDirection = normalize(v_surfaceToLight);
@@ -478,24 +518,20 @@ void main(void) {
 			vec3 halfVector = normalize(surfaceToLightDirection + surfaceToCamDirection);
 			
 			// light & spec
+			float lambertian = max(dot(normal, surfaceToLightDirection ), 0.0);
+			//float lambertian = dot(normal, surfaceToLightDirection );
+			
+			
+			vec3 ambient = Ma * Ia;
+			vec3 diffuse = Md * Id * lambertian;
 
-			light = dot(normal, surfaceToLightDirection );
-			specular = dot(normal, halfVector);
-			if(light < 0.0) {
-				light = 0.0;
-			}
+			vec3 specular = (lambertian < 0.0) ? vec3(0.0) : Is * Ms * pow( max(dot(normal, halfVector), 0.0), shininess);
+			
+			// do lighting
+			color  = min(  Ka * ambient + Kd * diffuse + Ks * specular, vec3( 1.0 ) );
+	
 		}
 
-		float dataValue = texture(volSampler, newTexCoord).r;
-		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
-		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
-		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
-
-		
-
-		// do lighting
-		color *= light;
-		color += specular;
 	
 		float unitDist = 1.0;
 
@@ -607,7 +643,46 @@ class VolRenderer {
         this.exitPointShaderProgram = this.compileShader(exitPointVsSrc, exitPointFsSrc)
 		return this;
 	}
+	renderLightSource(  
+		viewWidth, 
+		veiwHeight, 
+		vertices,
+		MVP,
+		color,
+		mode,
+		radius )
+	{
+		var gl = this.gl;
+		this.glCanvas.width  = viewWidth;
+		this.glCanvas.height = veiwHeight;
 
+		gl.viewport( 0, 0, viewWidth, veiwHeight );
+
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+		gl.bufferData( gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW, 0 );
+
+		gl.useProgram( this.basicShaderProgram );
+		gl.uniform4fv( 
+			gl.getUniformLocation( this.basicShaderProgram, "color" ), 
+			color );
+
+		gl.uniformMatrix4fv( 
+			gl.getUniformLocation( this.basicShaderProgram, "MVP" ), 
+			false, 
+			MVP ); 
+		gl.uniform1f(gl.getUniformLocation( this.basicShaderProgram, "pointSize" ), radius)
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+
+		var posAttr = gl.getAttribLocation( this.basicShaderProgram, "pos" );
+		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
+		gl.enableVertexAttribArray( posAttr );
+		gl.drawArrays( 
+			mode, 
+			0, 
+			vertices.length/3);   
+		
+		gl.disableVertexAttribArray( posAttr );     
+    }
 	render(  
 		viewWidth, 
 		veiwHeight, 
@@ -618,7 +693,6 @@ class VolRenderer {
 		lineWidth )
 	{
 		var gl = this.gl;
-
 		this.glCanvas.width  = viewWidth;
 		this.glCanvas.height = veiwHeight;
 
@@ -630,7 +704,6 @@ class VolRenderer {
 		gl.bufferData( gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW, 0 );
 
 		gl.useProgram( this.basicShaderProgram );
-
 		gl.uniform4fv( 
 			gl.getUniformLocation( this.basicShaderProgram, "color" ), 
 			color );
@@ -645,11 +718,10 @@ class VolRenderer {
 		var posAttr = gl.getAttribLocation( this.basicShaderProgram, "pos" );
 		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
 		gl.enableVertexAttribArray( posAttr );
-		
 		gl.drawArrays( 
 			mode, 
 			0, 
-			vertices.length / 3 );   
+			vertices.length/3);   
 		
 		gl.disableVertexAttribArray( posAttr );     
     }
@@ -666,6 +738,7 @@ class VolRenderer {
 		dims,
 		doLighting,
 		lightPosWorldSpace = [0,0,0],
+		lightColor = [1.0, 1.0, 1.0],
 		sampleDistance) {
 			// construct and calculate all attributes
 			// vector pointing from (0,0,0) in world space to the camera position
@@ -692,7 +765,9 @@ class VolRenderer {
 			
 			// light pos
 			var lightWorldPosition = glMatrix.vec3.fromValues(lightPosWorldSpace[0], lightPosWorldSpace[1], lightPosWorldSpace[2])
-			console.log(lightWorldPosition)
+			
+			// light color
+			var lightColorVec = glMatrix.vec3.fromValues(lightColor[0], lightColor[1], lightColor[2])
 			//glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
 	
 			// render
@@ -737,6 +812,8 @@ class VolRenderer {
 			gl.uniform1f( gl.getUniformLocation( sp, "sampleDistance" ), sampleDistance );
 			gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
 			gl.uniform1i( gl.getUniformLocation(sp, "height"), viewHeight);
+			
+			gl.uniform3fv( gl.getUniformLocation( sp, "lightColor" ), new Float32Array( lightColorVec ) );
 
 			gl.uniform3fv( gl.getUniformLocation( sp, "lightWorldPosition" ), new Float32Array( lightWorldPosition ) );
 			gl.uniform3fv( gl.getUniformLocation( sp, "camWorldPosition" ), new Float32Array( cameraPosVec ) );

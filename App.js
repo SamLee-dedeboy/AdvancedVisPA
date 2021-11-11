@@ -299,6 +299,7 @@ class App extends Widget {
  			// 	dims,
 			// 	this.lightingCheckBox.isChecked(), 
 			// 	0.25 );
+			
 			this.VolRenderer.renderRayCastingVolume( 
 				view.getSize().x, 
 				view.getSize().y, 
@@ -312,16 +313,28 @@ class App extends Widget {
  				dims,
 				this.lightingCheckBox.isChecked(), 
 				view.getLightPositionWorldSpace(dims),
+				view.getLightColor(),
 				1 );
 		}
-	
+		this.VolRenderer.renderLightSource(
+			view.getSize().x,
+			view.getSize().y,
+			new Float32Array(view.getLightPositionDataSpace()),
+			MVP,
+			view.getLightColor(),
+			this.VolRenderer.gl.POINTS,
+			10.0
+		)
 		view.clear();
 	    view.render( this.VolRenderer.getCanvas() );	
-		view.renderText(	
-			"light" ,
-			'rgb(255,255,255)',
-			view.dataSpacePositionToScreenSpacePos(dims, new Float32Array(view.getLightPositionDataSpace()))
-		)
+		// if( this.lightingCheckBox.isChecked() ) {
+			
+		// 	view.renderText(	
+		// 		"light" ,
+		// 		'rgb(255,255,255)',
+		// 		view.dataSpacePositionToScreenSpacePos(dims, new Float32Array(view.getLightPositionDataSpace()))
+		// 	)
+		// }
 		if( this.annoCheckBox.isChecked()  )
 		{
             var ds = [ dx,   dy,  dz ];
@@ -401,7 +414,7 @@ class App extends Widget {
 			this.convertToFloat == true ? "FLOAT" : this.metadata.format, 
 			dataMin,  
 			dataMax );
-		console.log(this.convertToFloat)
+		this.volView3d.setLightSource(this.metadata.dims);
 		this.updateAll();
 	}
 

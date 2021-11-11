@@ -80,6 +80,17 @@ class MyRangeSlider extends Widget {
         this.value = value
         return this
     }
+    setMin(min) {
+        this.min = min
+        this.slider.setAttribute("min", min)
+        return this;
+    }
+    setMax(max) {
+        this.max = max
+        this.slider.setAttribute("max", max)
+
+        return this;
+    }
     getMin() {
         return this.min;
     }
