@@ -40,6 +40,9 @@ class App extends Widget {
 			this.lightingCheckBox.getPosition().x - this.volumeCheckBox.getSize().x - this.margin*2,
 			this.margin );
 
+		this.preIntegrateCheckBox.setPosition( 
+			this.volumeCheckBox.getPosition().x - this.preIntegrateCheckBox.getSize().x - this.margin*2,
+			this.margin );
 		this.panelWidth = Math.min( Math.max( 
 			this.resizeHandle.getPosition().x - this.margin*2,
 			minPanelWidth ), maxPanelWidth );
@@ -312,6 +315,7 @@ class App extends Widget {
 				view.dataSpaceToWorldSpace( dims ),
  				dims,
 				this.lightingCheckBox.isChecked(), 
+				this.preIntegrateCheckBox.isChecked(),
 				view.getLightPositionWorldSpace(dims),
 				view.getLightColor(),
 				1 );
@@ -470,7 +474,10 @@ class App extends Widget {
         this.volumeCheckBox = new CheckBox( 
         	'body', 
         	"volume" );
-
+		this.preIntegrateCheckBox = new CheckBox( 
+			'body', 
+			"Pre-Integrate" );
+		
         this.metaInput = new FileInput( 
         	this.id + "_fileIn", 
         	'body', 
@@ -481,11 +488,11 @@ class App extends Widget {
         	'body', 
         	"Load Data File" ).setHidden( true );
 
-			this.metaDataView = new MetaDataView( 
-				'MetaDataView', 
-				this.getSelector(), 
-				[ "name", "dims", "format" ], 
-				"Dataset Information" );
+		this.metaDataView = new MetaDataView( 
+			'MetaDataView', 
+			this.getSelector(), 
+			[ "name", "dims", "format" ], 
+			"Dataset Information" );
 
 	    this.histogramView = new HistogramView( 
 	    	'HistogramView', 
@@ -685,6 +692,9 @@ class App extends Widget {
 		document.querySelector( this.volumeCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
 			self.renderVolView( self.volView3d );
 	    }, false );
+		document.querySelector( this.preIntegrateCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
+			self.renderVolView( self.volView3d );
+	    }, false );
 		document.querySelector( this.lightingCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
 			self.renderVolView( self.volView3d );
 	    }, false );
@@ -725,15 +735,15 @@ class App extends Widget {
 
 	    document.querySelector( self.TFView.getSelector()  ).addEventListener( 'colorTFModified', function( e ) {
 			self.TFView.getOpacityBuffer()
-	    	self.VolRenderer.setColorTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
+	    	self.VolRenderer.setTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
 			self.updateAll();
 
 	    }, false );
 	
 
 		document.querySelector( self.TFView.getSelector()  ).addEventListener( 'opacityTFModified', function( e ) {
-	    	self.VolRenderer.setColorTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
-			self.VolRenderer.setOpacityTF( self.TFView.getOpacityBuffer())
+	    	self.VolRenderer.setTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
+			//self.VolRenderer.setOpacityTF( self.TFView.getOpacityBuffer())
 			self.updateAll();
 
 	    }, false );

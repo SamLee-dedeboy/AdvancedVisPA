@@ -365,7 +365,7 @@ uniform highp sampler3D volSampler;
 uniform highp sampler2D exitPointSampler;
 uniform highp sampler2D colSampler;
 uniform highp sampler2D opcSampler;
-
+uniform highp sampler2D preIntSampler;
 uniform float xDim;
 uniform float yDim;
 uniform float zDim;
@@ -382,7 +382,7 @@ uniform vec3 lightWorldPosition;
 uniform vec3 camWorldPosition;
 uniform vec3 lightColor;
 uniform int doLighting;
-
+uniform int preIntegrated;
 
 out vec4 fragColor;
 in vec3 texCoord;
@@ -452,21 +452,41 @@ void main(void) {
 	float totalDistance = length(fullRay);
 	int nSample = int(totalDistance/sampleDistance);
 	vec3 t0 = entryPoint * dims;
+	int preMultiplied = preIntegrated;
 
 	// variable params
 	vec3 rayPos = t0;
 	vec3 dstColor = vec3(0.0, 0.0, 0.0);
 	float dstAlpha = 0.0;
 	vec3 newTexCoord = texCoord;
-	for(int i = 0; i < nSample; i++) {
-		newTexCoord = rayPos/dims;
-		float dataValue = texture(volSampler, newTexCoord).r;
-		float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
-		float opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
-		vec3 color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
+	vec3 lightColorMultiplied;
+	for(int i = preIntegrated; i < nSample; i++) {
+		float opacity;
+		vec3 color;
+		if(preIntegrated == 1) {
+			// pre integral
+			vec3 rayPosA = t0 + float(i-1) * rayDirection * sampleDistance;
+			vec3 rayPosB = t0 + float(i) * rayDirection * sampleDistance;
+
+			vec3 tcA = rayPosA / dims;
+			vec3 tcB = rayPosB / dims;
+
+			float normDataValueA = (texture(volSampler, tcA).r - dataMin) / (dataMax - dataMin);
+			float normDataValueB = (texture(volSampler, tcB).r - dataMin) / (dataMax - dataMin);
+			
+			newTexCoord = (tcA + tcB)/2.0;
+			vec4 preIntColor = texture(preIntSampler, vec2(normDataValueA, normDataValueB)).rgba;
+			opacity = preIntColor.a;
+			color = preIntColor.rgb;
+		} else {
+			newTexCoord = rayPos/dims;
+			float dataValue = texture(volSampler, newTexCoord).r;
+			float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
+			opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
+			color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
+		}
 
 		if(doLighting == 1) {
-
 			vec3 Ia = vec3( 1.0, 1.0, 1.0 );
 
 			//  diffuse light color
@@ -482,10 +502,11 @@ void main(void) {
 			vec3 Md = color;
 
 			// specular material color
-			vec3 Ms = lightColor;
+			vec3 Ms = color;
+			
 
 			// amount of ambient light
-			float Ka = 0.5;
+			float Ka = 0.3;
 
 			// amount of diffuse light
 			float Kd = 0.8;
@@ -519,13 +540,12 @@ void main(void) {
 			
 			// light & spec
 			float lambertian = max(dot(normal, surfaceToLightDirection ), 0.0);
-			//float lambertian = dot(normal, surfaceToLightDirection );
 			
 			
 			vec3 ambient = Ma * Ia;
 			vec3 diffuse = Md * Id * lambertian;
 
-			vec3 specular = (lambertian < 0.0) ? vec3(0.0) : Is * Ms * pow( max(dot(normal, halfVector), 0.0), shininess);
+			vec3 specular = (lambertian <= 0.0) ? vec3(0.0) : Is * Ms * pow( max(dot(normal, halfVector), 0.0), shininess);
 			
 			// do lighting
 			color  = min(  Ka * ambient + Kd * diffuse + Ks * specular, vec3( 1.0 ) );
@@ -537,8 +557,12 @@ void main(void) {
 
 		// correction
 		float srcAlphaCorrected = 1.0 - pow(1.0 - opacity, sampleDistance / unitDist);
-		vec3 srcColorCorrected =  color *  opacity * ( sampleDistance / unitDist );
-		
+
+		vec3 srcColorCorrected =  color *  ( sampleDistance / unitDist );
+
+		if(preMultiplied == 0) {
+			srcColorCorrected *= opacity;
+		}
 
 		// composite
 		dstAlpha += (1.0 - dstAlpha) * srcAlphaCorrected;
@@ -623,7 +647,7 @@ class VolRenderer {
         this.colTex = gl.createTexture();
         this.opcTex = gl.createTexture();        
 		this.exitPointTexture = gl.createTexture();
-
+		this.preIntTex = gl.createTexture();
         // buffers
 		this.renderTextureFrameBuffer = this.gl.createFramebuffer();
         this.vertexBuffer = this.gl.createBuffer();
@@ -737,6 +761,7 @@ class VolRenderer {
 		dataSpaceToWorldSpace,
 		dims,
 		doLighting,
+		preIntegrated,
 		lightPosWorldSpace = [0,0,0],
 		lightColor = [1.0, 1.0, 1.0],
 		sampleDistance) {
@@ -796,19 +821,39 @@ class VolRenderer {
 			// 	gl.ONE_MINUS_SRC_ALPHA
 			// );
 			
+			// render only front face
 			gl.enable(gl.CULL_FACE);
 			gl.cullFace(gl.BACK);
+				
+			// texture
+			gl.activeTexture( gl.TEXTURE0 );
+			gl.bindTexture( gl.TEXTURE_3D, this.volTex );
 	
+			gl.activeTexture( gl.TEXTURE1 );
+			gl.bindTexture( gl.TEXTURE_2D, this.colTex );
+	
+			gl.activeTexture( gl.TEXTURE2 );
+			gl.bindTexture( gl.TEXTURE_2D, this.opcTex );
+			
+			gl.activeTexture( gl.TEXTURE3 );
+			gl.bindTexture( gl.TEXTURE_2D, this.exitPointTexture );
+
+			gl.activeTexture( gl.TEXTURE4 );
+			gl.bindTexture( gl.TEXTURE_2D, this.preIntTex );
+
+			// buffer
 			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 			gl.bufferData( gl.ARRAY_BUFFER, bboxFacesDataSpace, gl.DYNAMIC_DRAW, 0 );
 	
 			gl.useProgram(  sp );
 			
+			// uniforms
 			gl.uniform1i( gl.getUniformLocation( sp, "volSampler" ), 0 );
 			gl.uniform1i( gl.getUniformLocation( sp, "colSampler" ), 1 );
 			gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
 			gl.uniform1i( gl.getUniformLocation( sp, "exitPointSampler"), 3);
-			
+			gl.uniform1i( gl.getUniformLocation( sp, "preIntSampler"), 4);
+
 			gl.uniform1f( gl.getUniformLocation( sp, "sampleDistance" ), sampleDistance );
 			gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
 			gl.uniform1i( gl.getUniformLocation(sp, "height"), viewHeight);
@@ -818,16 +863,7 @@ class VolRenderer {
 			gl.uniform3fv( gl.getUniformLocation( sp, "lightWorldPosition" ), new Float32Array( lightWorldPosition ) );
 			gl.uniform3fv( gl.getUniformLocation( sp, "camWorldPosition" ), new Float32Array( cameraPosVec ) );
 	
-			
-			gl.activeTexture( gl.TEXTURE0 );
-			gl.bindTexture( gl.TEXTURE_3D, this.volTex );
-	
-			gl.activeTexture( gl.TEXTURE1 );
-			gl.bindTexture( gl.TEXTURE_2D, this.colTex );
-	
-			gl.activeTexture( gl.TEXTURE2 );
-			gl.bindTexture( gl.TEXTURE_2D, this.opcTex );
-	
+
 			gl.uniform1f( gl.getUniformLocation( sp, "dataMin" ), this.dataMin );
 			gl.uniform1f( gl.getUniformLocation( sp, "dataMax" ), this.dataMax );
 	
@@ -837,6 +873,7 @@ class VolRenderer {
 	
 			gl.uniform1f( gl.getUniformLocation( sp, "alphaScale" ), alphaScale );
 			gl.uniform1i( gl.getUniformLocation( sp, "doLighting" ), doLighting ? 1 : 0 );
+			gl.uniform1i( gl.getUniformLocation( sp, "preIntegrated" ), preIntegrated ? 1 : 0 );
 	
 			gl.uniformMatrix4fv( 
 				gl.getUniformLocation( sp, "M_WORLD_TO_DATA_SPACE" ), 
@@ -895,7 +932,7 @@ class VolRenderer {
 			0)
 		// render 
 		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-			console.log("not working!")
+			console.log("frame buffer not working!")
 		}
 
 		var sp = this.exitPointShaderProgram
@@ -1589,8 +1626,104 @@ class VolRenderer {
 
 		return this;
 	}
+	setPreIntegralLookupTable(colorTF, opacityTF) {
+		// var length = opacityTF.length;
+		// opacityTF = new Array(length).fill(0);
+		// opacityTF[length/2-1] = 1;
+		// opacityTF[length/2] = 1;
+		// opacityTF[length/2+1] = 1;
+		// console.log(opacityTF)
+		var gl = this.gl;
+		var len = opacityTF.length;
+		var r = 0, g = 0, b = 0, a = 0;
+		var rInt = new Float32Array(len),
+		gInt = new Float32Array(len),
+		bInt = new Float32Array(len),
+		aInt = new Float32Array(len);
+		rInt[0] = 0, gInt[0] = 0, bInt[0] = 0, aInt[0] = 0;
+		// compute integral functions
+		for(var i = 1; i < len; ++i) {
+			var tauc = (opacityTF[i-1] + opacityTF[i])/2;
+			r +=  tauc * (colorTF[(i-1)*3 + 0] + colorTF[i*3 + 0])/2
+			g +=  tauc * (colorTF[(i-1)*3 + 1] + colorTF[i*3 + 1])/2
+			b +=  tauc * (colorTF[(i-1)*3 + 2] + colorTF[i*3 + 2])/2
+			a += tauc;
+			rInt[i] = r;
+			gInt[i] = g;
+			bInt[i] = b;
+			aInt[i] = a;
+		}
+		var smin, smax, factor;
+		var rcol, gcol, bcol, acol;
+		var lookupTable = new Float32Array(len*len*4);
+		var lookupIndex = 0;
+		// compute lookup table	
+		for(var sb = 0; sb < len; sb++) {
+			for(var sf = 0; sf < len; sf++) {
+				if(sb < sf) { 
+					smin = sb; 
+					smax = sf; 
+				}
+				else { 
+					smin = sf; 
+					smax = sb; 
+				}
+				
+				if(smax != smin) {
+					factor = 1/(smax - smin);
+					rcol = (rInt[smax] - rInt[smin]) * factor;
+					gcol = (gInt[smax] - gInt[smin]) * factor;
+					bcol = (bInt[smax] - bInt[smin]) * factor;
+					acol = (1 - Math.exp(-(aInt[smax] - aInt[smin]) * factor));
+				} else {
+					factor = 1/(len-1);
+					rcol = colorTF[smin*3 + 0] * opacityTF[smin] * factor;
+					gcol = colorTF[smin*3 + 1] * opacityTF[smin] * factor;
+					bcol = colorTF[smin*3 + 2] * opacityTF[smin] * factor;
+					acol = (1 - Math.exp(-opacityTF[smin] * factor))
+				}
+				var clamp = (a, min, max) => {
+					if(a < min) {
+						return min;
+					} else if(a > max) {
+						return max;
+					}
+					return a;
+				}
+				lookupTable[lookupIndex + 0] = clamp(rcol, 0, 1);
+				lookupTable[lookupIndex + 1] = clamp(gcol, 0, 1);
+				lookupTable[lookupIndex + 2] = clamp(bcol, 0, 1);
+				lookupTable[lookupIndex + 3] = clamp(acol, 0, 1);
+				// if(lookupIndex < len*4) {
+				// 	console.log(rcol, gcol, bcol)
+				// 	console.log(colorTF[lookupIndex/4*3], colorTF[lookupIndex/4*3+1], colorTF[lookupIndex/4*3+2])
+				// 	console.log("-------------")
+				// }
+				lookupIndex += 4;
+			}
+		}
+		gl.activeTexture( gl.TEXTURE4 );
 
-	setColorTF( colorTF, opacityTF)
+		gl.bindTexture( gl.TEXTURE_2D, this.preIntTex );
+		//gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+		gl.texImage2D(
+			gl.TEXTURE_2D,       // texture type
+		    0,                   // level
+			gl.RGBA32F,           // internalFormat
+			len,  					// width
+			len,                   // height
+			0,                   // border
+			gl.RGBA,              // format
+			gl.FLOAT,            // type
+			lookupTable );       // data
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+    	gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+		
+		return this;
+	}
+	setColorTF( colorTF )
 	{
 		// merge colorTF and opacityTF together
 		// var colorAlphaTF = new Float32Array(colorTF.length + opacityTF.length) 
@@ -1648,9 +1781,9 @@ class VolRenderer {
 	
 	setTF( colorTF, opacityTF )
 	{
-		this.setColorTF( colorTF, opacityTF );
+		this.setColorTF( colorTF );
 		this.setOpacityTF( opacityTF );
-		
+		this.setPreIntegralLookupTable(colorTF, opacityTF);
 		return this;
 	}
 
