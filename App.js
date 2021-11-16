@@ -43,6 +43,10 @@ class App extends Widget {
 		this.preIntegrateCheckBox.setPosition( 
 			this.volumeCheckBox.getPosition().x - this.preIntegrateCheckBox.getSize().x - this.margin*2,
 			this.margin );
+
+		this.rayCastingCheckBox.setPosition( 
+			this.preIntegrateCheckBox.getPosition().x - this.rayCastingCheckBox.getSize().x - this.margin*2,
+			this.margin );
 		this.panelWidth = Math.min( Math.max( 
 			this.resizeHandle.getPosition().x - this.margin*2,
 			minPanelWidth ), maxPanelWidth );
@@ -291,34 +295,39 @@ class App extends Widget {
  			// 	dims,
 			// 	this.lightingCheckBox.isChecked(), 
 			// 	0.5 );
-			// this.VolRenderer.renderViewAlignedCuttingPlanes( 
-			// 	view.getSize().x, 
-			// 	view.getSize().y, 
- 			//     view.getCameraPosition(),
- 			// 	view.up(),
- 			// 	view.bboxCornersWorldSpace( dims ),
- 			// 	view.worldSpaceToClipSpace( dims ),
- 			// 	view.worldSpaceToDataSpace( dims ),
- 			// 	dims,
-			// 	this.lightingCheckBox.isChecked(), 
-			// 	0.25 );
-			
-			this.VolRenderer.renderRayCastingVolume( 
-				view.getSize().x, 
-				view.getSize().y, 
- 			    view.getCameraPosition(),
-				view.getFacesGeometry( dims ),
- 				view.bboxCornersWorldSpace( dims ),
-				MVP,
- 				view.worldSpaceToClipSpace( dims ),
- 				view.worldSpaceToDataSpace( dims ),
-				view.dataSpaceToWorldSpace( dims ),
- 				dims,
-				this.lightingCheckBox.isChecked(), 
-				this.preIntegrateCheckBox.isChecked(),
-				view.getLightPositionWorldSpace(dims),
-				view.getLightColor(),
-				1 );
+			if(this.rayCastingCheckBox.isChecked()) {
+				this.VolRenderer.renderRayCastingVolume( 
+					view.getSize().x, 
+					view.getSize().y, 
+					 view.getCameraPosition(),
+					view.getFacesGeometry( dims ),
+					 view.bboxCornersWorldSpace( dims ),
+					MVP,
+					 view.worldSpaceToClipSpace( dims ),
+					 view.worldSpaceToDataSpace( dims ),
+					view.dataSpaceToWorldSpace( dims ),
+					 dims,
+					this.lightingCheckBox.isChecked(), 
+					this.preIntegrateCheckBox.isChecked(),
+					view.getLightPositionWorldSpace(dims),
+					view.getLightColor(),
+					1 );
+				
+			} else {
+				this.VolRenderer.renderViewAlignedCuttingPlanes( 
+					view.getSize().x, 
+					view.getSize().y, 
+					view.getCameraPosition(),
+					view.up(),
+					view.bboxCornersWorldSpace( dims ),
+					view.worldSpaceToClipSpace( dims ),
+					view.worldSpaceToDataSpace( dims ),
+					dims,
+					this.lightingCheckBox.isChecked(), 
+					view.getLightPositionWorldSpace(dims),
+					view.getLightColor(),
+					0.25 );
+			}
 		}
 		this.VolRenderer.renderLightSource(
 			view.getSize().x,
@@ -477,7 +486,9 @@ class App extends Widget {
 		this.preIntegrateCheckBox = new CheckBox( 
 			'body', 
 			"Pre-Integrate" );
-		
+		this.rayCastingCheckBox = new CheckBox( 
+			'body', 
+			"Ray-Casting" );
         this.metaInput = new FileInput( 
         	this.id + "_fileIn", 
         	'body', 
@@ -693,6 +704,9 @@ class App extends Widget {
 			self.renderVolView( self.volView3d );
 	    }, false );
 		document.querySelector( this.preIntegrateCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
+			self.renderVolView( self.volView3d );
+	    }, false );
+		document.querySelector( this.rayCastingCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
 			self.renderVolView( self.volView3d );
 	    }, false );
 		document.querySelector( this.lightingCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
