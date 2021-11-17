@@ -153,6 +153,7 @@ void main(void) {
 			opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
 			color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
 		}
+		if(opacity == 0.0) continue;
 
 		if(doLighting == 1) {
 			vec3 Ia = vec3( 1.0, 1.0, 1.0 );
@@ -235,6 +236,8 @@ void main(void) {
 		// composite
 		dstAlpha += (1.0 - dstAlpha) * srcAlphaCorrected;
 		dstColor += (1.0 - dstAlpha) * srcColorCorrected;
+		
+		if(1.0 - dstAlpha == 0.0) break;
 		
 		// move forward
 		rayPos += rayDirection * sampleDistance;
