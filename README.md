@@ -22,7 +22,7 @@ dstColor += (1.0 - dstAlpha) * srcColorCorrected;
 if(1.0 - dstAlpha == 0.0) break;
 ```
 In my final project, I plan to do empty space skipping described in:
-`SparseLeap: Efficient Empty Space Skipping for Large-Scale Volume Rendering`, so I think I might as well do a simple one in this assignment. 
+`SparseLeap: Efficient Empty Space Skipping for Large-Scale Volume Rendering`, so I thought I might as well do a simple one in this assignment. 
 
 ## Lighting
 In A3 my lighting implementation is quite simple, with just a single fixed point light and 0 ambient light. Also, there's probably some hidden bugs in it. So I add more functionalities to it in this assignment. 
@@ -51,7 +51,7 @@ Some of the effect screenshots:
 ![pics](pics/red%20light.png)
 
 ## Performance measuring
-I made check boxes to switch between different methods. If `Ray-casting` is unchecked, `view aligned polygon` is used to render instead. To make the comparison more reasonable, I implement the same lighting model for both ray-casting and view aligned polygon methods. Note that only ray-casting implements pre-integration, so unchecking it under `view aligned polygon` mode won't change anything. 
+I made check boxes to switch between different methods to compare their performance. If `Ray-casting` is unchecked, `view aligned polygon` is used to render instead. To make the comparison more reasonable, I implement the same lighting model for both ray-casting and view aligned polygon methods. Note that only ray-casting implements pre-integration, so unchecking it under `view aligned polygon` mode won't affect anything. 
 
 
 
