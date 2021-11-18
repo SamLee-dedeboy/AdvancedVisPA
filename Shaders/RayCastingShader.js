@@ -128,7 +128,7 @@ void main(void) {
 	float dstAlpha = 0.0;
 	vec3 newTexCoord = texCoord;
 	vec3 lightColorMultiplied;
-	for(int i = preIntegrated; i < nSample; i++) {
+	for(int i = preIntegrated; i < nSample; i++, rayPos += rayDirection * sampleDistance) {
 		float opacity;
 		vec3 color;
 		if(preIntegrated == 1) {
@@ -154,6 +154,7 @@ void main(void) {
 			color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
 		}
 		if(opacity == 0.0) continue;
+		
 
 		if(doLighting == 1) {
 			vec3 Ia = vec3( 1.0, 1.0, 1.0 );
@@ -239,8 +240,8 @@ void main(void) {
 		
 		if(1.0 - dstAlpha == 0.0) break;
 		
-		// move forward
-		rayPos += rayDirection * sampleDistance;
+		// // move forward
+		// rayPos += rayDirection * sampleDistance;
 	}	
 	
 	fragColor = vec4(dstColor, dstAlpha);

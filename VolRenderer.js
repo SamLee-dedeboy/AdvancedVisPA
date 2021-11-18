@@ -1037,7 +1037,6 @@ class VolRenderer {
 			gl.RED,            // format
 			gl.FLOAT,          // type
 			new Float32Array( opacityTF ) );       // data
-
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
         gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
@@ -1113,6 +1112,7 @@ class VolRenderer {
 				lookupTable[lookupIndex + 1] = clamp(gcol, 0, 1);
 				lookupTable[lookupIndex + 2] = clamp(bcol, 0, 1);
 				lookupTable[lookupIndex + 3] = clamp(acol, 0, 1);
+				
 				// if(lookupIndex < len*4) {
 				// 	console.log(rcol, gcol, bcol)
 				// 	console.log(colorTF[lookupIndex/4*3], colorTF[lookupIndex/4*3+1], colorTF[lookupIndex/4*3+2])
