@@ -188,7 +188,7 @@ class VolRenderer {
 		lightColor = [1.0, 1.0, 1.0],
 		sampleDistance) {
 			if(doSkipEmpty) {
-				bboxFacesDataSpace = new Float32Array(nonEmptyGeometry.flat(1))
+				bboxFacesDataSpace = nonEmptyGeometry
 			}
 			// construct and calculate all attributes
 			// vector pointing from (0,0,0) in world space to the camera position
@@ -334,8 +334,9 @@ class VolRenderer {
 			);
 			gl.disableVertexAttribArray( posAttr );     
 	}
-	getNonEmptyGeometry(facesGeometry, brickSize, dims) {
+	getNonEmptyFacesGeometry(facesGeometry, brickSize, dims, boundingBoxGeometry) {
 		var tmp = [];
+		var tmp4BoundingBox = [];
 		var bricksLength = {
 			x: Math.floor(dims[0] / brickSize),
 			y: Math.floor(dims[1] / brickSize),
@@ -349,13 +350,12 @@ class VolRenderer {
 					
 					if(!empty) {
 						tmp.push(facesGeometry[brickIndex])
-					} else {
-						console.log("removed")
-					}
+						tmp4BoundingBox.push(boundingBoxGeometry[brickIndex])
+					} 
 				}
 			}
 		}
-		return tmp;		
+		return [new Float32Array(tmp.flat(1)), new Float32Array(tmp4BoundingBox.flat(1))];		
 	}
 	checkBrickEmpty(startPoint, brickSize, dims) {
 		for(var i = startPoint.x; i < startPoint.x + brickSize; ++i) {

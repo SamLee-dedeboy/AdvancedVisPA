@@ -335,21 +335,65 @@ class VolView3d extends Canvas2dView
         return faces;
     }
 
-    getBrickGeometryDataSpace(brickSize, dims) {
+    getBrickFacesGeometryDataSpace(brickSize, dims) {
         if(this.brickArray != null) return this.brickArray;
         this.brickArray = []
         //if(dims[0] % brickSize != 0 || dims[1] % brickSize != 0 || dims[2] % brickSize != 0) throw "brick size invalid to dims"
-        var count = 0;
         for(var i = 0; i < Math.floor(dims[0] / brickSize); ++i) {
             for(var j = 0; j < Math.floor(dims[1] / brickSize); ++j) {
                 for(var k = 0; k < Math.floor(dims[2] / brickSize); ++k) {
-                    this.brickArray.push(this.getIndexedBrickGeometryDataSpace(i, j, k, brickSize))
+                    this.brickArray.push(this.getIndexedBrickFacesGeometryDataSpace(i, j, k, brickSize))
                 }
             }
         }
         return this.brickArray;
     }
-    getIndexedBrickGeometryDataSpace(i, j, k, brickSize) {
+    getBrickBoundingBoxGeometryDataSpace(brickSize, dims) {
+        if(this.brickArray == null) this.getBrickFacesGeometryDataSpace(brickSize, dims);
+        if(this.boundingBoxArray != null) return this.boundingBoxArray;
+        this.boundingBoxArray = []
+        for(var brickIndex = 0; brickIndex < this.brickArray.length; ++brickIndex) {
+     
+            this.boundingBoxArray.push(this.getIndexedBrickBoundingBoxGeometryDataSpace(brickIndex));        
+            
+        }
+        //this.boundingBoxArray = new Float32Array(this.boundingBoxArray.flat(1));
+        return this.boundingBoxArray;
+    }
+    getIndexedBrickBoundingBoxGeometryDataSpace(brickIndex) {
+        let brick = this.brickArray[brickIndex];
+        if(brickIndex == 0)
+            console.log(brick)
+        const A = this.getBrickCornerFromFaces(brick, 0);
+        const B = this.getBrickCornerFromFaces(brick, 1);
+        const C = this.getBrickCornerFromFaces(brick, 6);
+        const D = this.getBrickCornerFromFaces(brick, 5);
+        const E = this.getBrickCornerFromFaces(brick, 2);
+        const F = this.getBrickCornerFromFaces(brick, 8);
+        const G = this.getBrickCornerFromFaces(brick, 10);
+        const H = this.getBrickCornerFromFaces(brick, 7);
+        var lines = [
+            A,B,
+            A,C,
+            A,D,
+            B,E,
+            B,F,
+            C,F,
+            C,G,
+            D,E,
+            D,G,
+            E,H,
+            F,H,
+            G,H
+
+        ].flat(1);
+
+        return lines;
+    }
+    getBrickCornerFromFaces(brick, start) {
+        return [brick[start*3], brick[start*3+1], brick[start*3+2]]
+    }
+    getIndexedBrickFacesGeometryDataSpace(i, j, k, brickSize) {
         const A = this.getBrickCornerDataSpace(i, j, k, brickSize);
         const B = this.getBrickCornerDataSpace(i+1, j, k, brickSize)
         const C = this.getBrickCornerDataSpace(i, j+1, k, brickSize);

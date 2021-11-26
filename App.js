@@ -112,11 +112,8 @@ class App extends Widget {
 		return this;
 	}
 
-	renderBoundingBox3d( view, MVP )
+	renderBoundingBox3d( view, lines, MVP )
 	{
-		var dims = this.metadata.dims; 
-		var lines = view.getBoundingBoxGeometry( dims );
-
 		this.VolRenderer.render( 
 			view.getSize().x, 
 			view.getSize().y, 
@@ -253,7 +250,7 @@ class App extends Widget {
 
 		if( this.bbCheckBox.isChecked() )
 		{
-			this.renderBoundingBox3d( view, toClipSpace );
+			this.renderBoundingBox3d( view, view.getBoundingBoxGeometry( dims ), toClipSpace );
 		    this.VolRenderer.disableDepthTest();
 		}
 
@@ -297,14 +294,18 @@ class App extends Widget {
 			// 	0.5 );
 	
 			if(this.rayCastingCheckBox.isChecked()) {
-				let brickSize = 30;
+				let brickSize = 16;
 				if(this.tfChanged) {
-					this.nonEmptyGeometry = this.VolRenderer.getNonEmptyGeometry(view.getBrickGeometryDataSpace(brickSize, dims), brickSize, dims)
-					this.tfChanged = false;
+					let brickBoundingBoxGeo = view.getBrickBoundingBoxGeometryDataSpace(brickSize, dims)
+					let nonEmptyCulling = this.VolRenderer.getNonEmptyFacesGeometry(view.getBrickFacesGeometryDataSpace(brickSize, dims), brickSize, dims, brickBoundingBoxGeo)
+					this.nonEmptyGeometry = nonEmptyCulling[0]
+					this.nonEmptyBoundingBox = nonEmptyCulling[1]
+					this.tfChanged = false;	
 					console.log("get new geometry", this.nonEmptyGeometry.length)
 				}
+				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
 				this.VolRenderer.renderRayCastingVolume( 
-					view.getSize().x, 
+					view.getSize().x, 	
 					view.getSize().y, 
 					view.getCameraPosition(),
 					true,

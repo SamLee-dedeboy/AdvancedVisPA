@@ -153,13 +153,10 @@ void main(void) {
 			opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
 			color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
 		}
-<<<<<<< Updated upstream
 		if(opacity == 0.0) continue;
-=======
 		//if(opacity == 0.0) continue;
 		//fragColor = vec4(1, 0, 0, 1);
 		//return;
->>>>>>> Stashed changes
 		
 
 		if(doLighting == 1) {
