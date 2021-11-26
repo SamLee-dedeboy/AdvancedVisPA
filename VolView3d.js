@@ -299,7 +299,6 @@ class VolView3d extends Canvas2dView
         return corners;
     }
 
-    
     getFacesGeometry( dims ) {
         const corners = this.getBBoxCorners( dims );
         const A = corners[ 0 ]
@@ -334,6 +333,60 @@ class VolView3d extends Canvas2dView
             F, H, E
         ].flat(1))
         return faces;
+    }
+
+    getBrickGeometryDataSpace(brickSize, dims) {
+        if(this.brickArray != null) return this.brickArray;
+        this.brickArray = []
+        //if(dims[0] % brickSize != 0 || dims[1] % brickSize != 0 || dims[2] % brickSize != 0) throw "brick size invalid to dims"
+        var count = 0;
+        for(var i = 0; i < Math.floor(dims[0] / brickSize); ++i) {
+            for(var j = 0; j < Math.floor(dims[1] / brickSize); ++j) {
+                for(var k = 0; k < Math.floor(dims[2] / brickSize); ++k) {
+                    this.brickArray.push(this.getIndexedBrickGeometryDataSpace(i, j, k, brickSize))
+                }
+            }
+        }
+        return this.brickArray;
+    }
+    getIndexedBrickGeometryDataSpace(i, j, k, brickSize) {
+        const A = this.getBrickCornerDataSpace(i, j, k, brickSize);
+        const B = this.getBrickCornerDataSpace(i+1, j, k, brickSize)
+        const C = this.getBrickCornerDataSpace(i, j+1, k, brickSize);
+        const D = this.getBrickCornerDataSpace(i, j, k+1, brickSize);
+
+        const E = this.getBrickCornerDataSpace(i+1, j, k+1, brickSize);
+        const F = this.getBrickCornerDataSpace(i+1, j+1, k, brickSize);
+        const G = this.getBrickCornerDataSpace(i, j+1, k+1, brickSize);
+        const H = this.getBrickCornerDataSpace(i+1, j+1, k+1, brickSize);
+
+        var geometry = [
+            // xz, y=0
+            A, B, E,
+            A, E, D,
+            // xz, y=1
+            C, H, F,
+            C, G, H,
+
+            // xy, z=0
+            C, F, A,
+            F, B, A,
+            // xy, z=1
+            D, E, G,
+            E, H, G,
+            
+            // yz, x=0
+            C, A, G,
+            A, D, G,
+            // yz, x=1
+            B, F, E,
+            F, H, E
+        ].flat(1)
+        return geometry;
+
+    }
+    getBrickCornerDataSpace(i, j, k, brickSize) {
+        return [i*brickSize, j*brickSize, k*brickSize];
     }
     getLightPositionDataSpace() {
         return [Math.round(this.lightPosX.getValue()), Math.round(this.lightPosY.getValue()), Math.round(this.lightPosZ.getValue())]
@@ -398,6 +451,12 @@ class VolView3d extends Canvas2dView
             p.y,            
             p.z        
         );
+    }
+    getCamFrustumPlane() {
+        return {
+            near: this.camera.near,
+            far: this.camera.far
+        }
     }
 }
 

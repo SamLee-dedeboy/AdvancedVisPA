@@ -295,13 +295,21 @@ class App extends Widget {
  			// 	dims,
 			// 	this.lightingCheckBox.isChecked(), 
 			// 	0.5 );
+	
 			if(this.rayCastingCheckBox.isChecked()) {
+				let brickSize = 30;
+				if(this.tfChanged) {
+					this.nonEmptyGeometry = this.VolRenderer.getNonEmptyGeometry(view.getBrickGeometryDataSpace(brickSize, dims), brickSize, dims)
+					this.tfChanged = false;
+					console.log("get new geometry", this.nonEmptyGeometry.length)
+				}
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 
 					view.getSize().y, 
-					 view.getCameraPosition(),
-					view.getFacesGeometry( dims ),
-					 view.bboxCornersWorldSpace( dims ),
+					view.getCameraPosition(),
+					true,
+					this.nonEmptyGeometry,
+					view.getFacesGeometry(dims),
 					MVP,
 					 view.worldSpaceToClipSpace( dims ),
 					 view.worldSpaceToDataSpace( dims ),
@@ -456,7 +464,7 @@ class App extends Widget {
 
 	    this.readBinary   = false;
 	    this.readMetadata = false;
-
+		this.tfChanged = true;
 	    // properties //////////////////////////////////////////
 
 		this.margin = 10;
@@ -559,7 +567,8 @@ class App extends Widget {
 	    
 	    for( var i = 0; i < N_VALS; ++i )
 	    {
-	    	defaultOpacityTF[ i ] = ( i /  ( N_VALS * 2.0 ) );// * ( i / N_VALS );
+	    	//defaultOpacityTF[ i ] = ( i /  ( N_VALS * 2.0 ) );// * ( i / N_VALS );
+			defaultOpacityTF[ i ] = 0
 	    	const s = i / N_VALS;
 
 	    	defaultColorTF[ i*3 + 0 ] = 1.0 - 1 / ( Math.exp( s * 4 ) );
@@ -756,7 +765,8 @@ class App extends Widget {
 	
 
 		document.querySelector( self.TFView.getSelector()  ).addEventListener( 'opacityTFModified', function( e ) {
-	    	self.VolRenderer.setTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
+	    	self.tfChanged = true
+			self.VolRenderer.setTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
 			//self.VolRenderer.setOpacityTF( self.TFView.getOpacityBuffer())
 			self.updateAll();
 

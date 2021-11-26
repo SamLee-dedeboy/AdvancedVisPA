@@ -6,7 +6,6 @@ const ExitPointShader = {
 	uniform float xDim;
 	uniform float yDim;
 	uniform float zDim;
-	
 	out vec3 texCoord;
 
 	void main(void) { 
@@ -21,6 +20,7 @@ const ExitPointShader = {
 			pos.z,                   
 			1.0                  
 		); 
+	
     }`
     ,
     fsSrc:
@@ -31,8 +31,8 @@ const ExitPointShader = {
     
     in vec3 texCoord;
     void main(void) {
-        //exitPoint = vec4(0.5,0.5,0.5,1);
-         exitPoint = vec4(texCoord,1);
+        //exitPoint = vec4(1,0,0,0.5);
+        exitPoint = vec4(texCoord,1);
     }`
     
 

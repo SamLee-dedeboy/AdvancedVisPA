@@ -85,6 +85,7 @@ class VolRenderer {
 		this.raycastingVolumeRenderShader = this.compileShader(RayCastingShader.vsSrc, RayCastingShader.fsSrc);
 		this.viewAlignedVolumeRenderShader = this.compileShader(ViewAlignedPlanePolygonShader.vsSrc, ViewAlignedPlanePolygonShader.fsSrc);
         this.exitPointShaderProgram = this.compileShader(ExitPointShader.vsSrc, ExitPointShader.fsSrc)
+		
 		return this;
 	}
 	renderLightSource(  
@@ -173,8 +174,9 @@ class VolRenderer {
 		viewWidth,
 		viewHeight, 
 		cameraPosVec,
+		doSkipEmpty,
+		nonEmptyGeometry,
 		bboxFacesDataSpace,
-		bboxCornersWorldSpace,
 		dataSpaceToClipSpace,
 		worldSpaceToClipSpace,
 		worldSpaceToDataSpace,
@@ -185,6 +187,9 @@ class VolRenderer {
 		lightPosWorldSpace = [0,0,0],
 		lightColor = [1.0, 1.0, 1.0],
 		sampleDistance) {
+			if(doSkipEmpty) {
+				bboxFacesDataSpace = new Float32Array(nonEmptyGeometry.flat(1))
+			}
 			// construct and calculate all attributes
 			// vector pointing from (0,0,0) in world space to the camera position
 			var normalVec = glMatrix.vec3.create();
@@ -216,22 +221,21 @@ class VolRenderer {
 			//glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
 	
 			// render
+			
+
+
 			this.renderBackfaces(
 				viewWidth, 
 				viewHeight, 
 				bboxFacesDataSpace, 
 				dataSpaceToClipSpace, 
 				dims)
-			
-			let gl = this.gl;
 			let sp = this.raycastingVolumeRenderShader;
 			
 			this.glCanvas.width  = viewWidth;
 			this.glCanvas.height = viewHeight;
-	
+			let gl = this.gl;	
 			gl.viewport( 0, 0, viewWidth, viewHeight );
-			// gl.enable( gl.DEPTH_TEST );
-			// gl.depthFunc( gl.LESS );
 			// gl.depthMask( false );
 			// gl.enable( gl.BLEND );
 			// gl.blendFuncSeparate(
@@ -330,6 +334,50 @@ class VolRenderer {
 			);
 			gl.disableVertexAttribArray( posAttr );     
 	}
+	getNonEmptyGeometry(facesGeometry, brickSize, dims) {
+		var tmp = [];
+		var bricksLength = {
+			x: Math.floor(dims[0] / brickSize),
+			y: Math.floor(dims[1] / brickSize),
+			z: Math.floor(dims[2] / brickSize)
+		}
+		for(var i = 0; i < bricksLength.x; i++) {
+			for(var j = 0; j < bricksLength.y; j++) {
+				for(var k = 0; k < bricksLength.z; k++) {
+					var brickIndex = i*bricksLength.y*bricksLength.z + bricksLength.z * j + k;
+					var empty = this.checkBrickEmpty({x:i*brickSize, y:j*brickSize, z:k*brickSize}, brickSize, dims);
+					
+					if(!empty) {
+						tmp.push(facesGeometry[brickIndex])
+					} else {
+						console.log("removed")
+					}
+				}
+			}
+		}
+		return tmp;		
+	}
+	checkBrickEmpty(startPoint, brickSize, dims) {
+		for(var i = startPoint.x; i < startPoint.x + brickSize; ++i) {
+			for(var j = startPoint.y; j < startPoint.y + brickSize; ++j) {
+				for(var k = startPoint.z; k < startPoint.z + brickSize; ++k) {
+					if(Math.floor(i + j * dims[0] + k * dims[0] * dims[1]) > this.data.length) {
+						console.log(this.data.length,i, j, k)
+					}
+					if(!this.checkDataEmpty(this.data[Math.floor(i + j * dims[0] + k * dims[0] * dims[1])])) return false;
+				}
+			}
+		}
+		return true;
+	}
+	checkDataEmpty(dataValue) {
+		var opacityTF = this.opacityTF
+		var normalizedData = this.normalizeData(dataValue);
+		return (opacityTF[Math.floor(normalizedData * (opacityTF.length-1))] == 0)
+	}
+	normalizeData(dataValue) {
+		return (dataValue - this.dataMin)/(this.dataMax - this.dataMin);
+	}
 	renderBackfaces(
 		viewWidth, 
 		viewHeight, 
@@ -357,10 +405,12 @@ class VolRenderer {
 
 		var sp = this.exitPointShaderProgram
 		gl.useProgram(  sp );
-		// gl.enable( gl.DEPTH_TEST );
-		// gl.depthFunc( gl.LESS );
-		// gl.disable( gl.BLEND );
-		// gl.depthMask( true );
+		
+		gl.disable( gl.BLEND );
+		gl.enable( gl.DEPTH_TEST );
+		gl.depthFunc( gl.LESS )
+		gl.depthMask(true);
+		//gl.clearDepth(1.0);
 
 		gl.enable(gl.CULL_FACE);
 		gl.cullFace(gl.FRONT)
@@ -386,6 +436,7 @@ class VolRenderer {
 			gl.getUniformLocation( sp, "zDim"),
 			dims[2]
 		)
+
 		gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture);
 
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
@@ -394,6 +445,7 @@ class VolRenderer {
 		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
 		gl.enableVertexAttribArray( posAttr );
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.renderTextureFrameBuffer );
+		//gl.bindFramebuffer( gl.FRAMEBUFFER, null );
 
 		gl.drawArrays( 
 			gl.TRIANGLES, 
@@ -403,6 +455,8 @@ class VolRenderer {
 		// 
 		gl.disableVertexAttribArray( posAttr );  
 		gl.bindFramebuffer( gl.FRAMEBUFFER, null)
+		gl.disable(gl.DEPTH_TEST)
+		gl.enable( gl.BLEND );
 	}
 	
     // TODO --- INTEGRATE FROM A2
@@ -1024,6 +1078,7 @@ class VolRenderer {
 
 	setOpacityTF( opacityTF )
 	{
+		this.opacityTF = opacityTF
 		var gl = this.gl;
 		gl.activeTexture( gl.TEXTURE2 );
 		gl.bindTexture( gl.TEXTURE_2D, this.opcTex );
@@ -1210,6 +1265,7 @@ class VolRenderer {
 	{
 		var gl = this.gl;
 
+		this.data = data;
 		this.dims = dims;
 		this.type = type;
 
