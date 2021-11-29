@@ -312,25 +312,25 @@ class VolView3d extends Canvas2dView
         const H = corners[ 7 ]
         var faces = new Float32Array([
             // xz, y=0
-            A, B, E,
-            A, E, D,
+            A, E, B,
+            A, D, E,
             // xz, y=1
-            C, H, F,
-            C, G, H,
+            C, F, H,
+            C, H, G,
 
             // xy, z=0
-            C, F, A,
-            F, B, A,
+            C, A, F,
+            F, A, B,
             // xy, z=1
-            D, E, G,
-            E, H, G,
+            D, G, E,
+            E, G, H,
             
             // yz, x=0
-            C, A, G,
-            A, D, G,
+            C, G, A,
+            A, G, D,
             // yz, x=1
-            B, F, E,
-            F, H, E
+            B, E, F,
+            F, E, H
         ].flat(1))
         return faces;
     }
@@ -343,9 +343,16 @@ class VolView3d extends Canvas2dView
             for(var j = 0; j < Math.floor(dims[1] / brickSize); ++j) {
                 for(var k = 0; k < Math.floor(dims[2] / brickSize); ++k) {
                     this.brickArray.push(this.getIndexedBrickFacesGeometryDataSpace(i, j, k, brickSize))
+                    // this.brickArray.push(this.createCube(
+                    //     i*brickSize, (i+1)*brickSize, 
+                    //     j*brickSize, (j+1)*brickSize, 
+                    //     k*brickSize, (k+1)*brickSize 
+                    //     ))
+
                 }
             }
         }
+      
         return this.brickArray;
     }
     getBrickBoundingBoxGeometryDataSpace(brickSize, dims) {
@@ -360,10 +367,48 @@ class VolView3d extends Canvas2dView
         //this.boundingBoxArray = new Float32Array(this.boundingBoxArray.flat(1));
         return this.boundingBoxArray;
     }
+    createCube( 
+        xMin, xMax,
+        yMin, yMax,
+        zMin, zMax )
+    {
+        // 3 values per vertex, 6 vertices per face, 6 faces
+        var points = new Array( 3*6*6 );
+
+        var corners = [  
+            [ [ 0,0,0 ], [ 1,0,0 ], [ 1,0,1 ], [ 0,0,1 ] ],
+            [ [ 1,0,0 ], [ 1,1,0 ], [ 1,1,1 ], [ 1,0,1 ] ],
+            [ [ 1,1,0 ], [ 0,1,0 ], [ 0,1,1 ], [ 1,1,1 ] ],
+            [ [ 0,1,0 ], [ 0,0,0 ], [ 0,0,1 ], [ 0,1,1 ] ],
+            [ [ 0,0,1 ], [ 1,0,1 ], [ 1,1,1 ], [ 0,1,1 ] ],
+            [ [ 0,1,0 ], [ 1,1,0 ], [ 1,0,0 ], [ 0,0,0 ] ]                                                          
+        ];
+
+        var faceOrder = [ 0, 1, 2, 0, 2, 3 ];
+
+        var dx = xMax - xMin;
+        var dy = yMax - yMin;
+        var dz = zMax - zMin;
+
+        for ( var f = 0; f < 6; ++f )
+        {
+            var faceOffset = 18*f;
+            var c = corners[ f ];
+
+            for( var i = 0; i < 6; ++i )
+            {
+                var vOffset = i * 3;
+                points[ faceOffset + vOffset + 0  ] = xMin + c[ faceOrder[ i ] ][ 0 ] * dx;
+                points[ faceOffset + vOffset + 1  ] = yMin + c[ faceOrder[ i ] ][ 1 ] * dy;
+                points[ faceOffset + vOffset + 2  ] = zMin + c[ faceOrder[ i ] ][ 2 ] * dz;
+            }
+        }
+
+        return points;
+    }
     getIndexedBrickBoundingBoxGeometryDataSpace(brickIndex) {
         let brick = this.brickArray[brickIndex];
-        if(brickIndex == 0)
-            console.log(brick)
+
         const A = this.getBrickCornerFromFaces(brick, 0);
         const B = this.getBrickCornerFromFaces(brick, 1);
         const C = this.getBrickCornerFromFaces(brick, 6);
@@ -405,26 +450,26 @@ class VolView3d extends Canvas2dView
         const H = this.getBrickCornerDataSpace(i+1, j+1, k+1, brickSize);
 
         var geometry = [
-            // xz, y=0
-            A, B, E,
-            A, E, D,
-            // xz, y=1
-            C, H, F,
-            C, G, H,
-
-            // xy, z=0
-            C, F, A,
-            F, B, A,
-            // xy, z=1
-            D, E, G,
-            E, H, G,
-            
-            // yz, x=0
-            C, A, G,
-            A, D, G,
-            // yz, x=1
-            B, F, E,
-            F, H, E
+             // xz, y=0
+             A, E, B,
+             A, D, E,
+             // xz, y=1
+             C, F, H,
+             C, H, G,
+ 
+             // xy, z=0
+             C, A, F,
+             F, A, B,
+             // xy, z=1
+             D, G, E,
+             E, G, H,
+             
+             // yz, x=0
+             C, G, A,
+             A, G, D,
+             // yz, x=1
+             B, E, F,
+             F, E, H
         ].flat(1)
         return geometry;
 

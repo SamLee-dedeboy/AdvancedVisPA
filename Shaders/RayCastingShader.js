@@ -30,10 +30,12 @@ const RayCastingShader = {
 precision highp float;
 
 uniform highp sampler3D volSampler;
+uniform highp sampler2D entryPointDepthSampler;
 uniform highp sampler2D exitPointSampler;
 uniform highp sampler2D colSampler;
 uniform highp sampler2D opcSampler;
 uniform highp sampler2D preIntSampler;
+
 uniform float xDim;
 uniform float yDim;
 uniform float zDim;
@@ -110,7 +112,10 @@ vec3 centralDifferenceNormal(vec3 texCoord) {
 void main(void) {
 	vec2 fragPos = gl_FragCoord.xy;
 	vec2 normalizedFragPos = fragPos / vec2(width, height);
+	float entryPointDepth = texture(entryPointDepthSampler, normalizedFragPos.xy).x;
+	if(gl_FragCoord.z > entryPointDepth) discard;
 	vec3 entryPoint = texCoord;
+
 	vec3 exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
 	
 	// constant params
@@ -126,7 +131,7 @@ void main(void) {
 	vec3 rayPos = t0;
 	vec3 dstColor = vec3(0.0, 0.0, 0.0);
 	float dstAlpha = 0.0;
-	vec3 newTexCoord = texCoord;
+	vec3 newTexCoord = entryPoint;
 	vec3 lightColorMultiplied;
 	for(int i = preIntegrated; i < nSample; i++, rayPos += rayDirection * sampleDistance) {
 		float opacity;
@@ -154,9 +159,7 @@ void main(void) {
 			color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
 		}
 		if(opacity == 0.0) continue;
-		//if(opacity == 0.0) continue;
-		//fragColor = vec4(1, 0, 0, 1);
-		//return;
+		
 		
 
 		if(doLighting == 1) {
@@ -248,7 +251,7 @@ void main(void) {
 	}	
 	
 	fragColor = vec4(dstColor, dstAlpha);
-
+	//fragColor = vec4(1, 0, 0, 1);
 
 }`
 }

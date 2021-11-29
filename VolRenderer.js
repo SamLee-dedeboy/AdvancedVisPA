@@ -54,7 +54,8 @@ class VolRenderer {
 		    console.error( "Extension 'OES_texture_float_linear' not supported" );
 		    return;
 		}
-
+		
+		console.log(gl.getSupportedExtensions())
         // Only continue if WebGL is available and working
         if ( gl === null) {
           window.alert( "Unable to initialize WebGL." );
@@ -67,9 +68,14 @@ class VolRenderer {
         this.colTex = gl.createTexture();
         this.opcTex = gl.createTexture();        
 		this.exitPointTexture = gl.createTexture();
+		this.entryPointTexture = gl.createTexture();
 		this.preIntTex = gl.createTexture();
+		this.depthTexture = gl.createTexture();
+
         // buffers
-		this.renderTextureFrameBuffer = this.gl.createFramebuffer();
+		this.depthBuffer = this.gl.createFramebuffer();
+		this.exitPointTextureFrameBuffer = this.gl.createFramebuffer();
+		this.entryPointTextureFrameBuffer = this.gl.createFramebuffer();
         this.vertexBuffer = this.gl.createBuffer();
         // shaders for simple 3d rendering (bounding boxes axis, etc)
 
@@ -85,7 +91,7 @@ class VolRenderer {
 		this.raycastingVolumeRenderShader = this.compileShader(RayCastingShader.vsSrc, RayCastingShader.fsSrc);
 		this.viewAlignedVolumeRenderShader = this.compileShader(ViewAlignedPlanePolygonShader.vsSrc, ViewAlignedPlanePolygonShader.fsSrc);
         this.exitPointShaderProgram = this.compileShader(ExitPointShader.vsSrc, ExitPointShader.fsSrc)
-		
+		this.depthShaderProgram = this.compileShader(DepthShader.vsSrc, DepthShader.fsSrc)
 		return this;
 	}
 	renderLightSource(  
@@ -174,6 +180,7 @@ class VolRenderer {
 		viewWidth,
 		viewHeight, 
 		cameraPosVec,
+		camFrustPlane,
 		doSkipEmpty,
 		nonEmptyGeometry,
 		bboxFacesDataSpace,
@@ -189,6 +196,7 @@ class VolRenderer {
 		sampleDistance) {
 			if(doSkipEmpty) {
 				bboxFacesDataSpace = nonEmptyGeometry
+				if(bboxFacesDataSpace.lenght == 0) return;
 			}
 			// construct and calculate all attributes
 			// vector pointing from (0,0,0) in world space to the camera position
@@ -222,11 +230,18 @@ class VolRenderer {
 	
 			// render
 			
-
-
+			this.renderFrontFaces(
+				viewWidth, 
+				viewHeight, 
+				camFrustPlane,
+				bboxFacesDataSpace, 
+				dataSpaceToClipSpace, 
+				dims
+			)
 			this.renderBackfaces(
 				viewWidth, 
 				viewHeight, 
+				camFrustPlane,
 				bboxFacesDataSpace, 
 				dataSpaceToClipSpace, 
 				dims)
@@ -268,7 +283,8 @@ class VolRenderer {
 			// buffer
 			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 			gl.bufferData( gl.ARRAY_BUFFER, bboxFacesDataSpace, gl.DYNAMIC_DRAW, 0 );
-	
+		
+
 			gl.useProgram(  sp );
 			
 			// uniforms
@@ -277,6 +293,7 @@ class VolRenderer {
 			gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
 			gl.uniform1i( gl.getUniformLocation( sp, "exitPointSampler"), 3);
 			gl.uniform1i( gl.getUniformLocation( sp, "preIntSampler"), 4);
+			gl.uniform1i( gl.getUniformLocation( sp, "entryPointDepthSampler"), 5);
 
 			gl.uniform1f( gl.getUniformLocation( sp, "sampleDistance" ), sampleDistance );
 			gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
@@ -378,44 +395,63 @@ class VolRenderer {
 	normalizeData(dataValue) {
 		return (dataValue - this.dataMin)/(this.dataMax - this.dataMin);
 	}
-	renderBackfaces(
+
+	renderDepthValue(
 		viewWidth, 
-		viewHeight, 
-		surfaceVertices, 
-        dataSpaceToClipSpaceMatrix,
-		dims) 	
+		viewHeight,
+		camFrustPlane,
+		surfaceVertices,
+		dataSpaceToClipSpaceMatrix,
+		dims,
+		blendEqua) 
 	{
 		var gl = this.gl
-
 		this.glCanvas.width  = viewWidth;
 		this.glCanvas.height  = viewHeight;
-		this.setExitPointTexture(viewWidth, viewHeight);
-
-		gl.bindFramebuffer( gl.FRAMEBUFFER, this.renderTextureFrameBuffer);
+		this.setDepthTexture(viewWidth ,  viewHeight);
+		//this.setExitPointTexture(viewWidth, viewHeight)
+		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT)
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.depthBuffer);
 		gl.framebufferTexture2D( 
 			gl.FRAMEBUFFER, 
 			gl.COLOR_ATTACHMENT0,  
 			gl.TEXTURE_2D, 
-			this.exitPointTexture,
+			this.depthTexture,
 			0)
+		// const depthBufferForFrame = gl.createRenderbuffer();
+		// gl.bindRenderbuffer(gl.RENDERBUFFER, depthBufferForFrame);
+			
+		// // make a depth buffer and the same size as the targetTexture
+		// gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, viewWidth, viewHeight);
+		// gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBufferForFrame);
+		gl.viewport( 0, 0, viewWidth, viewHeight );
 		// render 
 		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
 			console.log("frame buffer not working!")
 		}
 
-		var sp = this.exitPointShaderProgram
+		var sp = this.depthShaderProgram
 		gl.useProgram(  sp );
+		// gl.enable( gl.DEPTH_TEST );
+		// gl.depthFunc( gl.LEQUAL )
+		// gl.depthMask(true);
+		//gl.disable( gl.BLEND );
+		//  gl.enable( gl.DEPTH_TEST );
+		//  gl.depthFunc( gl.GREATER )
+		//  gl.depthMask(true);
+		//gl.clearDepth(0);
+		gl.enable(gl.BLEND)
+		gl.blendEquation(blendEqua)
+	 	//gl.enable(gl.DEPTH_TEST);
+		//gl.clear(gl.DEPTH_BUFFER_BIT);
+		//gl.depthFunc(gl.GREATER);
+		//gl.depthMask(true);
+		//gl.depthRange(0.0, 1.0);
+		//gl.disable(gl.DEPTH_TEST)
+		gl.disable(gl.CULL_FACE)
+		// //gl.enable(gl.CULL_FACE);
+		// gl.cullFace(gl.FRONT);
 		
-		gl.disable( gl.BLEND );
-		gl.enable( gl.DEPTH_TEST );
-		gl.depthFunc( gl.LESS )
-		gl.depthMask(true);
-		//gl.clearDepth(1.0);
-
-		gl.enable(gl.CULL_FACE);
-		gl.cullFace(gl.FRONT)
-
-		gl.viewport( 0, 0, viewWidth, viewHeight );
 
 		
 		//gl.bufferData( gl.FRAMEBUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0 );
@@ -436,15 +472,24 @@ class VolRenderer {
 			gl.getUniformLocation( sp, "zDim"),
 			dims[2]
 		)
-
-		gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture);
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "near"),
+			camFrustPlane.near
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "far"),
+			camFrustPlane.far
+		)
+		
+		gl.activeTexture(gl.TEXTURE5);
+		gl.bindTexture(gl.TEXTURE_2D, this.depthTexture);
 
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 		gl.bufferData( gl.ARRAY_BUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0)
 		var posAttr = gl.getAttribLocation( sp, "pos" );
 		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
 		gl.enableVertexAttribArray( posAttr );
-		gl.bindFramebuffer( gl.FRAMEBUFFER, this.renderTextureFrameBuffer );
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.depthBuffer );
 		//gl.bindFramebuffer( gl.FRAMEBUFFER, null );
 
 		gl.drawArrays( 
@@ -456,6 +501,210 @@ class VolRenderer {
 		gl.disableVertexAttribArray( posAttr );  
 		gl.bindFramebuffer( gl.FRAMEBUFFER, null)
 		gl.disable(gl.DEPTH_TEST)
+		gl.enable( gl.BLEND );
+	}
+	renderFrontFaces(
+		viewWidth, 
+		viewHeight, 
+		camFrustPlane,
+		surfaceVertices, 
+        dataSpaceToClipSpaceMatrix,
+		dims
+	) {
+		if(surfaceVertices.length == 0) return;
+		var gl = this.gl
+
+		this.renderDepthValue(viewWidth, viewHeight, camFrustPlane, surfaceVertices, dataSpaceToClipSpaceMatrix, dims, gl.MIN);
+		return;
+		this.glCanvas.width  = viewWidth;
+		this.glCanvas.height  = viewHeight;
+		this.setEntryPointTexture(viewWidth, viewHeight);
+
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.entryPointTextureFrameBuffer);
+		gl.framebufferTexture2D( 
+			gl.FRAMEBUFFER, 
+			gl.COLOR_ATTACHMENT0,  
+			gl.TEXTURE_2D, 
+			this.entryPointTexture,
+			0)
+		
+		// render 
+		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+			console.log("frame buffer not working!")
+		}
+
+
+		
+		gl.enable( gl.BLEND );
+		gl.disable( gl.DEPTH_TEST );
+		//gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);	
+
+		//gl.depthFunc( gl.GEQUAL )
+		//gl.depthMask(true);
+		//gl.clearDepth(1.0);
+
+		// gl.enable(gl.CULL_FACE);
+		// gl.cullFace(gl.FRONT)
+
+		gl.viewport( 0, 0, viewWidth, viewHeight );
+
+		// texture
+		gl.activeTexture( gl.TEXTURE6 );
+		gl.bindTexture( gl.TEXTURE_2D, this.entryPointTexture );
+
+		// buffer
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+		gl.bufferData( gl.ARRAY_BUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0)
+				
+		var sp = this.exitPointShaderProgram
+		gl.useProgram(  sp );
+
+		// uniforms
+		gl.uniformMatrix4fv( 
+			gl.getUniformLocation( sp, "MVP" ), 
+			false, 
+			dataSpaceToClipSpaceMatrix );		
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "xDim"),
+			dims[0]
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "yDim"),
+			dims[1]
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "zDim"),
+			dims[2]
+		)
+		gl.uniform1f( gl.getUniformLocation(sp, "near"), camFrustPlane.near);
+		gl.uniform1f( gl.getUniformLocation(sp, "far"), camFrustPlane.far);
+		gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
+		gl.uniform1i( gl.getUniformLocation(sp, "height"), viewHeight);
+		gl.uniform1i( gl.getUniformLocation( sp, "depthSampler" ), 5 );
+		gl.uniform1i( gl.getUniformLocation( sp, "flag" ), 0 );
+
+		gl.bindTexture(gl.TEXTURE_2D, this.entryPointTexture);
+
+	
+
+		var posAttr = gl.getAttribLocation( sp, "pos" );
+		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
+		gl.enableVertexAttribArray( posAttr );
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.entryPointTextureFrameBuffer );
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+
+		gl.drawArrays( 
+			gl.TRIANGLES, 
+			0, 
+			surfaceVertices.length / 3 );   
+		
+		// 
+		gl.disableVertexAttribArray( posAttr );  
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null)
+		gl.disable(gl.DEPTH_TEST)
+		gl.depthFunc(gl.ALWAYS)
+		gl.enable( gl.BLEND );
+	}
+	renderBackfaces(
+		viewWidth, 
+		viewHeight, 
+		camFrustPlane,
+		surfaceVertices, 
+        dataSpaceToClipSpaceMatrix,
+		dims) 	
+	{
+		if(surfaceVertices.length == 0) return;
+		var gl = this.gl
+
+		this.renderDepthValue(viewWidth, viewHeight, camFrustPlane, surfaceVertices, dataSpaceToClipSpaceMatrix, dims, gl.MAX);
+
+		this.glCanvas.width  = viewWidth;
+		this.glCanvas.height  = viewHeight;
+		this.setExitPointTexture(viewWidth, viewHeight);
+
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.exitPointTextureFrameBuffer);
+		gl.framebufferTexture2D( 
+			gl.FRAMEBUFFER, 
+			gl.COLOR_ATTACHMENT0,  
+			gl.TEXTURE_2D, 
+			this.exitPointTexture,
+			0)
+		
+		// render 
+		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+			console.log("frame buffer not working!")
+		}
+
+
+		
+		gl.enable( gl.BLEND );
+		gl.disable( gl.DEPTH_TEST );
+		//gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);	
+
+		//gl.depthFunc( gl.GEQUAL )
+		//gl.depthMask(true);
+		//gl.clearDepth(1.0);
+
+		// gl.enable(gl.CULL_FACE);
+		// gl.cullFace(gl.FRONT)
+
+		gl.viewport( 0, 0, viewWidth, viewHeight );
+
+		// texture
+		gl.activeTexture( gl.TEXTURE3 );
+		gl.bindTexture( gl.TEXTURE_2D, this.exitPointTexture );
+
+		// buffer
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+		gl.bufferData( gl.ARRAY_BUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0)
+				
+		var sp = this.exitPointShaderProgram
+		gl.useProgram(  sp );
+
+		// uniforms
+		gl.uniformMatrix4fv( 
+			gl.getUniformLocation( sp, "MVP" ), 
+			false, 
+			dataSpaceToClipSpaceMatrix );		
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "xDim"),
+			dims[0]
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "yDim"),
+			dims[1]
+		)
+		gl.uniform1f(
+			gl.getUniformLocation( sp, "zDim"),
+			dims[2]
+		)
+		gl.uniform1f( gl.getUniformLocation(sp, "near"), camFrustPlane.near);
+		gl.uniform1f( gl.getUniformLocation(sp, "far"), camFrustPlane.far);
+		gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
+		gl.uniform1i( gl.getUniformLocation(sp, "height"), viewHeight);
+		gl.uniform1i( gl.getUniformLocation( sp, "depthSampler" ), 5 );
+		gl.uniform1i( gl.getUniformLocation( sp, "flag" ), 1 );
+
+		gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture);
+
+	
+
+		var posAttr = gl.getAttribLocation( sp, "pos" );
+		gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
+		gl.enableVertexAttribArray( posAttr );
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.exitPointTextureFrameBuffer );
+		//gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+
+		gl.drawArrays( 
+			gl.TRIANGLES, 
+			0, 
+			surfaceVertices.length / 3 );   
+		
+		// 
+		gl.disableVertexAttribArray( posAttr );  
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null)
+		gl.disable(gl.DEPTH_TEST)
+		gl.depthFunc(gl.ALWAYS)
 		gl.enable( gl.BLEND );
 	}
 	
@@ -1231,6 +1480,27 @@ class VolRenderer {
 		
 		return this;
 	}
+	setDepthTexture(width, height) {
+		var gl = this.gl
+
+		gl.activeTexture( gl.TEXTURE5 );
+		gl.bindTexture(gl.TEXTURE_2D, this.depthTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGBA32F, 
+			width, 
+			height, 
+			0, 
+			gl.RGBA,
+			gl.FLOAT,
+			null)
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+		return this
+	}
 	setExitPointTexture(width, height) {
 		var gl = this.gl
 
@@ -1252,7 +1522,27 @@ class VolRenderer {
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
 		return this
 	}
-	
+	setEntryPointTexture(width, height) {
+		var gl = this.gl
+
+		gl.activeTexture( gl.TEXTURE6 );
+		gl.bindTexture(gl.TEXTURE_2D, this.entryPointTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGBA32F, 
+			width, 
+			height, 
+			0, 
+			gl.RGBA,
+			gl.FLOAT,
+			null)
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+		return this
+	}
 	setTF( colorTF, opacityTF )
 	{
 		this.setColorTF( colorTF );

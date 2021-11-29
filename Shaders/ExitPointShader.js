@@ -28,10 +28,32 @@ const ExitPointShader = {
     precision highp float;
     
     out vec4 exitPoint;
-    
+    uniform highp sampler2D depthSampler;
+	uniform int flag;
+	uniform int width;
+	uniform int height;
+	uniform float near;
+	uniform float far;
     in vec3 texCoord;
     void main(void) {
-        //exitPoint = vec4(1,0,0,0.5);
+		vec2 fragPos = gl_FragCoord.xy;
+		vec2 normalizedFragPos = fragPos / vec2(width, height);
+		float depth = texture(depthSampler, normalizedFragPos).r;
+
+		
+		//vec3 fraction = vec3(1, 1/256, 1/(256*256));
+		//float depthValue = dot(depth, fraction);
+
+		//float z = gl_FragCoord.z*(far-near) + near;
+		
+		float z = gl_FragCoord.z;
+		if(flag == 1) { // exit
+			if(z < depth) discard;			
+		} else { // entry
+			if(z > depth) discard;
+		}
+		//exitPoint = vec4(z,0,0,0.5);
+
         exitPoint = vec4(texCoord,1);
     }`
     

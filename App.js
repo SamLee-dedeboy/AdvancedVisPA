@@ -303,11 +303,18 @@ class App extends Widget {
 					this.tfChanged = false;	
 					console.log("get new geometry", this.nonEmptyGeometry.length)
 				}
-				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
+				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
+				console.log(view.getCameraPosition())
+
+				//view.camera.position.set(0.014,-3.4,0.83 );
+
+				//console.log(view.getCamFrustumPlane())
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
 					view.getCameraPosition(),
+					//glMatrix.vec3.fromValues(0.014,-3.4,0.83),
+					view.getCamFrustumPlane(),
 					true,
 					this.nonEmptyGeometry,
 					view.getFacesGeometry(dims),
