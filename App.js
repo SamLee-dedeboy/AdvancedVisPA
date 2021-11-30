@@ -3,9 +3,9 @@ function parseMetadata( text )
 {
 	var lines = text.split( '\n' );
 	return {
-		"format" : lines[ 0 ],
+		"format" : lines[ 0 ].replace(/\r/g,''),
 		"dims"   : lines[ 1 ].split( ' ' ).map( Number ),		
-		"name"   : lines[ 2 ]
+		"name"   : lines[ 2 ].replace(/\r/g,''),
 	}
 }
 
@@ -112,16 +112,55 @@ class App extends Widget {
 		return this;
 	}
 
-	renderBoundingBox3d( view, lines, MVP )
+	renderBoundingBox3d( view, lines, MVP , occuClassArray = null)
 	{
-		this.VolRenderer.render( 
-			view.getSize().x, 
-			view.getSize().y, 
-			lines, 
-			MVP,
-			[ 0.7, 0.7, 0.7, 1.0 ],
-			this.VolRenderer.gl.LINES,
-			2.0 ); 
+		//occuClassArray = null
+		if(occuClassArray == null) {
+			this.VolRenderer.render( 
+				view.getSize().x, 
+				view.getSize().y, 
+				lines, 
+				MVP,
+				[ 0.7, 0.7, 0.7, 1.0 ],
+				this.VolRenderer.gl.LINES,
+				2.0 ); 
+		} else {
+			// non-empty lines
+			for(var i = 0; i < lines.length/(3*12*2); ++i) {
+				if(occuClassArray[i] == 1) {
+					var startIndex = i*3*12*2;
+					var endIndex = startIndex + 3*12*2;
+					var subArray = lines.slice(startIndex, endIndex+1)
+					this.VolRenderer.render( 
+						view.getSize().x, 
+						view.getSize().y, 
+						subArray, 
+						MVP,
+						[ 0.7, 0.7, 0.7, 1.0 ],
+						this.VolRenderer.gl.LINES,
+						2.0 
+					); 
+				}	
+			}
+			// empty lines
+			for(var i = 0; i < lines.length/(3*12*2); ++i) {
+				if(occuClassArray[i] == 0) {
+					console.log("empty lines!")
+					var startIndex = i*3*12*2;
+					var endIndex = startIndex + 3*12*2;
+					var subArray = lines.slice(startIndex, endIndex+1)
+					this.VolRenderer.render( 
+						view.getSize().x, 
+						view.getSize().y, 
+						subArray, 
+						MVP,
+						[ 0, 1, 0, 1.0 ],
+						this.VolRenderer.gl.LINES,
+						2.0 
+					); 
+				}	
+			}
+		}
 	}
 
 	renderAxis3d( view, toClipSpace, dx, dy, dz )
@@ -295,27 +334,61 @@ class App extends Widget {
 	
 			if(this.rayCastingCheckBox.isChecked()) {
 				let brickSize = 16;
+				var skipMode = 1; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
 				if(this.tfChanged) {
-					let brickBoundingBoxGeo = view.getBrickBoundingBoxGeometryDataSpace(brickSize, dims)
-					let nonEmptyCulling = this.VolRenderer.getNonEmptyFacesGeometry(view.getBrickFacesGeometryDataSpace(brickSize, dims), brickSize, dims, brickBoundingBoxGeo)
-					this.nonEmptyGeometry = nonEmptyCulling[0]
-					this.nonEmptyBoundingBox = nonEmptyCulling[1]
-					this.tfChanged = false;	
-					console.log("get new geometry", this.nonEmptyGeometry.length)
+					if(skipMode == 1) {
+						if(this.approxGeo == null) {
+							this.approxGeo = new ApproxGeometry(brickSize, {dims: dims, min: this.dataMin, max: this.dataMax}, this.data);
+						} 
+						
+						let nonEmptyCulling = this.approxGeo.getNonEmptyFacesGeometry(this.opcTfData)
+						this.nonEmptyGeometry = new Float32Array(nonEmptyCulling[0])
+						this.nonEmptyBoundingBox = new Float32Array(nonEmptyCulling[1])
+						this.tfChanged = false;	
+						console.log("get new geometry", this.nonEmptyGeometry.length)
+						
+						// let brickBoundingBoxGeo = view.getBrickBoundingBoxGeometryDataSpace(brickSize, dims)
+						// let nonEmptyCulling = this.VolRenderer.getNonEmptyFacesGeometry(view.getBrickFacesGeometryDataSpace(brickSize, dims), brickSize, dims, brickBoundingBoxGeo)
+						// this.nonEmptyGeometry = nonEmptyCulling[0]
+						// this.nonEmptyBoundingBox = nonEmptyCulling[1]
+						// this.tfChanged = false;	
+						// console.log("get new geometry", this.nonEmptyGeometry.length)
+					} else if(skipMode == 2) {
+						if(this.octree == null) {
+							this.octree = new Octree
+							(
+								{dims: dims, min: this.dataMin, max: this.dataMax},
+								this.data,
+								this.opcTfData
+							)
+						} else {
+							this.octree.updateOccuClass({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
+						}
+						console.log("get new octree!", this.octree.root);
+
+						var octreeBoxGeoWithOccuClass = this.octree.getBoundingBoxGeometry()
+						//console.log(octreeBoxGeoWithOccuClass)
+						this.nonEmptyBoundingBox = new Float32Array(octreeBoxGeoWithOccuClass.geometry.flat(1));
+						this.boxOccuClass = octreeBoxGeoWithOccuClass.occuClassArray;
+						//console.log(octreeBoundingBoxGeo)
+						let octreeFacesGeoWithOccuClass = this.octree.getFacesGeometry();
+						this.nonEmptyGeometry = new Float32Array(octreeFacesGeoWithOccuClass.geometry.flat(1));
+						this.boxOccuClass = octreeFacesGeoWithOccuClass.occuClassArray;
+						
+						this.tfChanged = false;	
+
+					}
+					
 				}
+				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
 				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
-				console.log(view.getCameraPosition())
-
-				//view.camera.position.set(0.014,-3.4,0.83 );
-
-				//console.log(view.getCamFrustumPlane())
+				//console.log(view.getCameraPosition())
+				
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
 					view.getCameraPosition(),
-					//glMatrix.vec3.fromValues(0.014,-3.4,0.83),
-					view.getCamFrustumPlane(),
-					true,
+					skipMode,
 					this.nonEmptyGeometry,
 					view.getFacesGeometry(dims),
 					MVP,
@@ -434,15 +507,15 @@ class App extends Widget {
 		this.histogramView.set( histModel );
 
         // TODO, get min and max of data, maybe from histogram model
-		var dataMin = histModel.xMin;
-		var dataMax = histModel.xMax;
-
+		this.dataMin = histModel.xMin;
+		this.dataMax = histModel.xMax;
+	
 		this.VolRenderer.setData( 
 			this.data, 
 			this.metadata.dims, 
 			this.convertToFloat == true ? "FLOAT" : this.metadata.format, 
-			dataMin,  
-			dataMax );
+			this.dataMin,  
+			this.dataMax );
 		this.volView3d.setLightSource(this.metadata.dims);
 		this.updateAll();
 	}
@@ -642,7 +715,7 @@ class App extends Widget {
 	        reader.readAsArrayBuffer( file );
 
 	        reader.onload = function() {
-
+				console.log(self.metadata)
 	        	if( self.metadata.format == "FLOAT" )
 	        	{
 	            	self.data = new Float32Array( reader.result );
@@ -775,6 +848,7 @@ class App extends Widget {
 		document.querySelector( self.TFView.getSelector()  ).addEventListener( 'opacityTFModified', function( e ) {
 	    	self.tfChanged = true
 			self.VolRenderer.setTF( self.TFView.getColorBuffer(), self.TFView.getOpacityBuffer() );
+			self.opcTfData = self.TFView.getOpacityBuffer()
 			//self.VolRenderer.setOpacityTF( self.TFView.getOpacityBuffer())
 			self.updateAll();
 
