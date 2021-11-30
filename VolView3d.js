@@ -448,7 +448,6 @@ class VolView3d extends Canvas2dView
         const F = this.getBrickCornerDataSpace(i+1, j+1, k, brickSize);
         const G = this.getBrickCornerDataSpace(i, j+1, k+1, brickSize);
         const H = this.getBrickCornerDataSpace(i+1, j+1, k+1, brickSize);
-
         var geometry = [
              // xz, y=0
              A, E, B,
@@ -477,6 +476,8 @@ class VolView3d extends Canvas2dView
     getBrickCornerDataSpace(i, j, k, brickSize) {
         return [i*brickSize, j*brickSize, k*brickSize];
     }
+
+
     getLightPositionDataSpace() {
         return [Math.round(this.lightPosX.getValue()), Math.round(this.lightPosY.getValue()), Math.round(this.lightPosZ.getValue())]
     }

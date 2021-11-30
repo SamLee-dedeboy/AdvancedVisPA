@@ -30,12 +30,13 @@ const RayCastingShader = {
 precision highp float;
 
 uniform highp sampler3D volSampler;
-uniform highp sampler2D entryPointDepthSampler;
 uniform highp sampler2D exitPointSampler;
+
 uniform highp sampler2D colSampler;
 uniform highp sampler2D opcSampler;
 uniform highp sampler2D preIntSampler;
-
+uniform highp sampler2D approxEntryPointDepthSampler;
+uniform highp sampler2D approxExitPointSampler;
 uniform float xDim;
 uniform float yDim;
 uniform float zDim;
@@ -53,7 +54,7 @@ uniform vec3 camWorldPosition;
 uniform vec3 lightColor;
 uniform int doLighting;
 uniform int preIntegrated;
-
+uniform int skipMode;
 out vec4 fragColor;
 in vec3 texCoord;
 
@@ -110,14 +111,21 @@ vec3 centralDifferenceNormal(vec3 texCoord) {
 	return normal;
 }
 void main(void) {
+	// fragColor = vec4(1, 0, 0, 0.1);
+	// return;
 	vec2 fragPos = gl_FragCoord.xy;
 	vec2 normalizedFragPos = fragPos / vec2(width, height);
-	float entryPointDepth = texture(entryPointDepthSampler, normalizedFragPos.xy).x;
-	if(gl_FragCoord.z > entryPointDepth) discard;
-	vec3 entryPoint = texCoord;
+	vec3 entryPoint, exitPoint;
+	if(skipMode == 1) {
+		float entryPointDepth = texture(approxEntryPointDepthSampler, normalizedFragPos.xy).x;
+		if(gl_FragCoord.z > entryPointDepth) discard;
 
-	vec3 exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
-	
+		entryPoint = texCoord;
+		exitPoint = texture(approxExitPointSampler, normalizedFragPos.xy).xyz;
+	} else if(skipMode == 0) {
+		entryPoint = texCoord;
+		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+	}
 	// constant params
 	vec3 dims = vec3(xDim, yDim, zDim);
 	vec3 fullRay = (exitPoint - entryPoint) * dims;

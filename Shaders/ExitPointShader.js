@@ -32,27 +32,24 @@ const ExitPointShader = {
 	uniform int flag;
 	uniform int width;
 	uniform int height;
+	uniform int skipMode;
 	uniform float near;
 	uniform float far;
     in vec3 texCoord;
     void main(void) {
-		vec2 fragPos = gl_FragCoord.xy;
-		vec2 normalizedFragPos = fragPos / vec2(width, height);
-		float depth = texture(depthSampler, normalizedFragPos).r;
-
-		
-		//vec3 fraction = vec3(1, 1/256, 1/(256*256));
-		//float depthValue = dot(depth, fraction);
-
-		//float z = gl_FragCoord.z*(far-near) + near;
-		
-		float z = gl_FragCoord.z;
-		if(flag == 1) { // exit
-			if(z < depth) discard;			
-		} else { // entry
-			if(z > depth) discard;
+		if(skipMode == 1) {
+			vec2 fragPos = gl_FragCoord.xy;
+			vec2 normalizedFragPos = fragPos / vec2(width, height);
+			float depth = texture(depthSampler, normalizedFragPos).r;
+			
+			float z = gl_FragCoord.z;
+			
+			if(flag == 1) { // exit
+				if(z < depth) discard;			
+			} else { // entry
+				if(z > depth) discard;
+			}
 		}
-		//exitPoint = vec4(z,0,0,0.5);
 
         exitPoint = vec4(texCoord,1);
     }`

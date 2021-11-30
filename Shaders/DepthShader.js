@@ -28,7 +28,7 @@ const DepthShader = {
     precision highp float;
 
     uniform float near;
-    uniform float far;
+    uniform float far;  
     uniform int flag;
     out vec4 depthVec;
     in vec3 texCoord;
@@ -45,7 +45,13 @@ const DepthShader = {
         //depthVec = vec4(z, frac(z*256.0), frac(z*256.0*256.0), 1);
         
         depthVec = vec4(z, 0, 0, 0.5);
-       
+        // if(gl_FrontFacing) {
+        //     depthVec = vec4(1, 0, 0, 0.5);
+        // } else {
+        //     depthVec = vec4(0, 0, 1, 0.5);
+
+        // }
+
     }`
     
 
