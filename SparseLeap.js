@@ -1,18 +1,18 @@
 class SparseLeap {
-    constructor(metadata, data, opacityTF) {
+    constructor(metadata, data) {
         this.occupancyHistogramTree = new OccupancyHistogramTree(metadata, data)
     }
     updateOccuClass(metadata, opacityTF) {
         this.occupancyHistogramTree.updateOccuClass(metadata, opacityTF);
     }
-    updateOccupancyHistogramTree(metadata, opacityTF) {
+    updateOccupancyGeometry(metadata, opacityTF) {
         this.updateOccuClass(metadata, opacityTF);
-        this.generateOccupancyHistogram(this.occupancyHistogramTree.root);
-        return this.occupancyHistogramTree;
+        this.generateOccupancyHistogramTree(this.occupancyHistogramTree.root);
+        return this.generateOccupancyGeometry(this.occupancyHistogramTree.root);
     }
 
 
-    generateOccupancyHistogram(node) {
+    generateOccupancyHistogramTree(node) {
         console.log(node)
         var emptyCount = 0;
         var nonEmptyCount = 0;
@@ -23,7 +23,7 @@ class SparseLeap {
                 else nonEmptyCount++;
                 continue;
             }
-            var childHisrogram = this.generateOccupancyHistogram(child);
+            var childHisrogram = this.generateOccupancyHistogramTree(child);
             emptyCount += childHisrogram.emptyCount;
             nonEmptyCount += childHisrogram.nonEmptyCount;
         }
@@ -42,7 +42,29 @@ class SparseLeap {
         }
         return node.occupancyHistogram;
     }
-    getOccupancyGeometry() {
-        
+    generateOccupancyGeometry(root) {
+        this.boxGeometryArray = []
+        this.boxTagsArray = []
+        root.occuClass = 0;
+        this.boxGeometryArray.push(root.constructBoundingBoxFaces())
+        this.boxTagsArray.push([0,0])
+        var nextLayerArray = root.children;
+        while(nextLayerArray.length != 0) {
+            var thisLayerArray = nextLayerArray;
+            nextLayerArray = [];
+            for(var nodeIndex = 0; nodeIndex < thisLayerArray.length; nodeIndex++) {
+                var curNode = thisLayerArray[nodeIndex];
+                if(curNode.occuClass != curNode.parent.occuClass) {
+                    this.boxGeometryArray.push(curNode.constructBoundingBoxFaces());
+                    this.boxTagsArray.push([curNode.occuClass,curNode.parent.occuClass])
+
+                }
+                if(!curNode.isLeafNode) nextLayerArray = nextLayerArray.concat(curNode.children)
+            }
+        }
+        return {
+            geometry: this.boxGeometryArray.flat(1),
+            occuClasses: this.boxTagsArray.flat(1)
+        }
     }
 }

@@ -332,7 +332,6 @@ class App extends Widget {
 							(
 								{dims: dims, min: this.dataMin, max: this.dataMax},
 								this.data,
-								this.opcTfData
 							)
 						} else {
 							this.octree.updateOccuClass({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
@@ -356,12 +355,12 @@ class App extends Widget {
 							(
 								{dims: dims, min: this.dataMin, max: this.dataMax},
 								this.data,
-								this.opcTfData
 							)	
 						} else {
-							this.sparseLeap.updateOccupancyHistogramTree({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
+							this.occupancyGeometry = this.sparseLeap.updateOccupancyGeometry({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
 						}
-						console.log("get new occupancy histogram tree", this.sparseLeap.occupancyHistogramTree.root)
+						console.log("get new occupancy histogram geometry", this.occupancyGeometry)
+						
 						this.tfChanged = false;	
 
 					}
