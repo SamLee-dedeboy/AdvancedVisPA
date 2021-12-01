@@ -2,7 +2,7 @@ class VolRenderer {
 
 	static nextId = 0;
 
-	compileShader( vsSrc, fsSrc )
+	compileShader( vsSrc, fsSrc, name )
 	{
 		var gl = this.gl;
 
@@ -27,7 +27,7 @@ class VolRenderer {
         gl.attachShader( program, fs );
         gl.linkProgram(  program );
         if ( ! gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
-            window.alert( 'Shader program failed: ' 
+            window.alert( 'Shader program ' +name +' failed: ' 
                 + gl.getProgramInfoLog( program ) );
         }
 
@@ -94,11 +94,11 @@ class VolRenderer {
 
         // TODO compile shader for rendering view aligned polygones for texture based volume rendering
         
-        this.textureBasedVolumeRenderShader = this.compileShader( ViewAlignedPlaneRectShader.vsSrc, ViewAlignedPlaneRectShader.fsSrc );
-		this.raycastingVolumeRenderShader = this.compileShader(RayCastingShader.vsSrc, RayCastingShader.fsSrc);
-		this.viewAlignedVolumeRenderShader = this.compileShader(ViewAlignedPlanePolygonShader.vsSrc, ViewAlignedPlanePolygonShader.fsSrc);
-        this.exitPointShaderProgram = this.compileShader(ExitPointShader.vsSrc, ExitPointShader.fsSrc)
-		this.depthShaderProgram = this.compileShader(DepthShader.vsSrc, DepthShader.fsSrc)
+        this.textureBasedVolumeRenderShader = this.compileShader( ViewAlignedPlaneRectShader.vsSrc, ViewAlignedPlaneRectShader.fsSrc, 'ViewAlignedPlaneRect');
+		this.raycastingVolumeRenderShader = this.compileShader(RayCastingShader.vsSrc, RayCastingShader.fsSrc, 'RayCasting');
+		this.viewAlignedVolumeRenderShader = this.compileShader(ViewAlignedPlanePolygonShader.vsSrc, ViewAlignedPlanePolygonShader.fsSrc, 'ViewAlignedPlanePolygon');
+        this.exitPointShaderProgram = this.compileShader(ExitPointShader.vsSrc, ExitPointShader.fsSrc, 'ExitPoint')
+		this.depthShaderProgram = this.compileShader(DepthShader.vsSrc, DepthShader.fsSrc, 'Depth')
 		return this;
 	}
 	renderLightSource(  
@@ -273,11 +273,11 @@ class VolRenderer {
 					dims
 				)
 			}
+			let gl = this.gl;	
 			let sp = this.raycastingVolumeRenderShader;
-			
+			gl.useProgram(sp)
 			this.glCanvas.width  = viewWidth;
 			this.glCanvas.height = viewHeight;
-			let gl = this.gl;	
 			gl.viewport( 0, 0, viewWidth, viewHeight );
 			
 			// gl.depthMask( false );
@@ -291,8 +291,12 @@ class VolRenderer {
 			
 			// render only front face
 			gl.enable(gl.CULL_FACE);
-			gl.cullFace(gl.BACK);
-				
+			gl.cullFace(gl.FRONT);
+
+			// buffer
+			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
+			gl.bufferData( gl.ARRAY_BUFFER, bboxFacesDataSpace, gl.DYNAMIC_DRAW, 0 );
+
 			// texture
 			gl.activeTexture( gl.TEXTURE0 );
 			gl.bindTexture( gl.TEXTURE_3D, this.volTex );
@@ -309,46 +313,44 @@ class VolRenderer {
 			gl.activeTexture( gl.TEXTURE4 );
 			gl.bindTexture( gl.TEXTURE_2D, this.preIntTex );
 
-
-			gl.activeTexture( gl.TEXTURE5 );
-			gl.bindTexture( gl.TEXTURE_2D, this.depthTexture );
+			// gl.activeTexture( gl.TEXTURE5 );
+			// gl.bindTexture( gl.TEXTURE_2D, this.depthTexture );
 	
-			gl.activeTexture( gl.TEXTURE6 );
-			gl.bindTexture( gl.TEXTURE_2D, this.approxExitPointTexture );
+			// gl.activeTexture( gl.TEXTURE6 );
+			// gl.bindTexture( gl.TEXTURE_2D, this.approxExitPointTexture );
 	
-			gl.activeTexture( gl.TEXTURE7 );
-			gl.bindTexture( gl.TEXTURE_2D, this.approxEntryPointTexture );
+			// gl.activeTexture( gl.TEXTURE7 );
+			// gl.bindTexture( gl.TEXTURE_2D, this.approxEntryPointTexture );
+			// gl.useProgram(  sp );
+
+			// gl.activeTexture( gl.TEXTURE8 );
+			// gl.bindTexture( gl.TEXTURE_2D, this.octreeTagTexture );
+
+			// gl.activeTexture( gl.TEXTURE9 );
+			// gl.bindTexture( gl.TEXTURE_2D, this.octreeStartPointTexture );
+
+			// gl.activeTexture( gl.TEXTURE10 );
+			// gl.bindTexture( gl.TEXTURE_2D, this.octreeEndPointTexture );
+			gl.uniform1i( gl.getUniformLocation( sp, "exitPointSampler"), 3);
+
 			
-			gl.activeTexture( gl.TEXTURE8 );
-			gl.bindTexture( gl.TEXTURE_2D, this.octreeTagTexture );
-
-			gl.activeTexture( gl.TEXTURE9 );
-			gl.bindTexture( gl.TEXTURE_2D, this.octreeStartPointTexture );
-
-			gl.activeTexture( gl.TEXTURE10 );
-			gl.bindTexture( gl.TEXTURE_2D, this.octreeEndPointTexture );
-
-			// buffer
-			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
-			gl.bufferData( gl.ARRAY_BUFFER, bboxFacesDataSpace, gl.DYNAMIC_DRAW, 0 );
-		
-
-			gl.useProgram(  sp );
+			gl.uniform1i( gl.getUniformLocation( sp, "approxEntryPointDepthSampler"), 5);
+			gl.uniform1i( gl.getUniformLocation( sp, "approxExitPointSampler"), 6);
+			//gl.uniform1i( gl.getUniformLocation( sp, "approxEntryPointSampler"), 7);
 			
+
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeTagSampler"), 8);
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeStartPointSampler"), 9);
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeEndPointSampler"), 10);
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeTextureLength"), octreeBfsArray == null? 0:octreeBfsArray.length);
+					
 			// uniforms
 			gl.uniform1i( gl.getUniformLocation( sp, "volSampler" ), 0 );
 			gl.uniform1i( gl.getUniformLocation( sp, "colSampler" ), 1 );
 			gl.uniform1i( gl.getUniformLocation( sp, "opcSampler" ), 2 );
-			gl.uniform1i( gl.getUniformLocation( sp, "exitPointSampler"), 3);
 			gl.uniform1i( gl.getUniformLocation( sp, "preIntSampler"), 4);
-			gl.uniform1i( gl.getUniformLocation( sp, "approxEntryPointDepthSampler"), 5);
-			gl.uniform1i( gl.getUniformLocation( sp, "approxExitPointSampler"), 6);
-			gl.uniform1i( gl.getUniformLocation( sp, "approxEntryPointSampler"), 7);
 
-			gl.uniform1i( gl.getUniformLocation( sp, "octreeTagSampler"), 8);
-			gl.uniform1i( gl.getUniformLocation( sp, "octreeStartPointSampler"), 9);
-			gl.uniform1i( gl.getUniformLocation( sp, "octreeEntPointSampler"), 10);
-			gl.uniform1i( gl.getUniformLocation( sp, "octreeTextureLength"), octreeBfsArray == null? 0:octreeBfsArray.length);
+			
 
 			gl.uniform1f( gl.getUniformLocation( sp, "sampleDistance" ), sampleDistance );
 			gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
@@ -396,7 +398,6 @@ class VolRenderer {
 	
 			gl.vertexAttribPointer( posAttr, 3, gl.FLOAT, false, 0, 0 );
 			gl.enableVertexAttribArray( posAttr );
-	
 				
 			gl.drawArrays(
 				gl.TRIANGLES, 
@@ -777,7 +778,7 @@ class VolRenderer {
 		// gl.depthMask( true );
 
 		gl.enable(gl.CULL_FACE);
-		gl.cullFace(gl.FRONT)
+		gl.cullFace(gl.BACK)
 
 		gl.viewport( 0, 0, viewWidth, viewHeight );
 
@@ -804,7 +805,7 @@ class VolRenderer {
 			gl.getUniformLocation( sp, "skipMode"),
 			0
 		)
-		gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture);
+		//gl.bindTexture(gl.TEXTURE_2D, this.exitPointTexture);
 
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 		gl.bufferData( gl.ARRAY_BUFFER, surfaceVertices, gl.DYNAMIC_DRAW, 0)
@@ -1598,27 +1599,6 @@ class VolRenderer {
 		
 		return this;
 	}
-	setDepthTexture(width, height) {
-		var gl = this.gl
-
-		gl.activeTexture( gl.TEXTURE5 );
-		gl.bindTexture(gl.TEXTURE_2D, this.depthTexture)
-		gl.texImage2D(
-			gl.TEXTURE_2D, 
-			0, 
-			gl.RGBA32F, 
-			width, 
-			height, 
-			0, 
-			gl.RGBA,
-			gl.FLOAT,
-			null)
-		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
-		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
-		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
-		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
-		return this
-	}
 	setExitPointTexture(width, height) {
 		var gl = this.gl
 
@@ -1640,6 +1620,28 @@ class VolRenderer {
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
 		return this
 	}
+	setDepthTexture(width, height) {
+		var gl = this.gl
+
+		gl.activeTexture( gl.TEXTURE5 );
+		gl.bindTexture(gl.TEXTURE_2D, this.depthTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGBA32F, 
+			width, 
+			height, 
+			0, 
+			gl.RGBA,
+			gl.FLOAT,
+			null)
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+		return this
+	}
+
 	setApproxExitPointTexture(width, height) {
 		var gl = this.gl
 
@@ -1683,6 +1685,7 @@ class VolRenderer {
 		return this
 	}
 	setOctreeTexture(octreeBfsArray) {
+		console.log(octreeBfsArray)
 		var gl = this.gl
 		var octreeStartPointArray = [];
 		var octreeEndPointArray = [];
@@ -1692,14 +1695,17 @@ class VolRenderer {
 			var node = octreeBfsArray[i];
 			// start point array
 			octreeStartPointArray = octreeStartPointArray.concat(node.startPoint.flat(1));
-
-			// end point array
-			octreeStartPointArray = octreeEndPointArray.concat(node.endPoint.flat(1));
+			if(node.startPoint[0] == 32 && node.startPoint[1] == 32 && node.startPoint[2] == 64) {
+				console.log(i, node)
+			}
+			// end point array	
+			octreeEndPointArray = octreeEndPointArray.concat(node.endPoint.flat(1));
 
 			// tag array
 			octreeTagsArray.push(node.firstChildrenIndex)
 			octreeTagsArray.push(node.occuClass)
 		}
+		console.log(octreeEndPointArray[45*3], octreeEndPointArray[45*3+1], octreeEndPointArray[45*3+2])
 		// tag texture
 		gl.activeTexture( gl.TEXTURE8 );
 		gl.bindTexture(gl.TEXTURE_2D, this.octreeTagTexture)
@@ -1714,7 +1720,8 @@ class VolRenderer {
 			gl.UNSIGNED_SHORT,
 			new Uint16Array(octreeTagsArray)
 		);
-		
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		// start point texture
 		gl.activeTexture( gl.TEXTURE9 );
 		gl.bindTexture(gl.TEXTURE_2D, this.octreeStartPointTexture)
@@ -1729,6 +1736,9 @@ class VolRenderer {
 			gl.UNSIGNED_SHORT,
 			new Uint16Array(octreeStartPointArray)
 		);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
 		// end point texture
 		gl.activeTexture( gl.TEXTURE10 );
 		gl.bindTexture(gl.TEXTURE_2D, this.octreeEndPointTexture)
@@ -1741,9 +1751,10 @@ class VolRenderer {
 			0, 
 			gl.RGB_INTEGER,
 			gl.UNSIGNED_SHORT,
-			new Uint16Array(octreeBfsArray)
+			new Uint16Array(octreeEndPointArray)
 		);
-				
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		return this
 	}
 	setTF( colorTF, opacityTF )

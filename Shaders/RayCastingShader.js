@@ -26,27 +26,29 @@ const RayCastingShader = {
 
     }`,
     fsSrc:
-    `#version 300 es
+`#version 300 es
 precision highp float;
-
+precision highp int;
+precision highp usampler2D;
 // reguler sampler
 uniform highp sampler3D volSampler; 
 uniform highp sampler2D colSampler;
 uniform highp sampler2D opcSampler;
-uniform highp sampler2D preIntSampler;
 
 // no skippiing
 uniform highp sampler2D exitPointSampler;
+uniform highp sampler2D preIntSampler;
+
 
 // approx geo
 uniform highp sampler2D approxEntryPointDepthSampler;
 uniform highp sampler2D approxExitPointSampler;
-uniform highp sampler2D approxEntryPointSampler; // not used
+//uniform highp sampler2D approxEntryPointSampler; // not used
 
 // octree
-uniform highp sampler2D octreeTagSampler;
-uniform highp sampler2D octreeStartPointSampler;
-uniform highp sampler2D octreeEndPointSampler;
+uniform highp usampler2D octreeTagSampler;
+uniform highp usampler2D octreeStartPointSampler;
+uniform highp usampler2D octreeEndPointSampler;
 
 uniform int octreeTextureLength;
 uniform float xDim;
@@ -122,32 +124,37 @@ vec3 centralDifferenceNormal(vec3 texCoord) {
 
 	return normal;
 }
-bool inNode(vec3 curPoint, vec3 startPoint, vec3 endPoint) {
+bool inNode(uvec3 curPoint, uvec3 startPoint, uvec3 endPoint) {
 	return
-		startPoint.x < curPoint.x && curPoint.x < endPoint.x
+		(startPoint.x <= curPoint.x && curPoint.x <= endPoint.x)
 		&&
-		startPoint.y < curPoint.y && curPoint.y < endPoint.y
+		(startPoint.y <= curPoint.y && curPoint.y <= endPoint.y)
 		&&
-		startPoint.z < curPoint.z && curPoint.z < endPoint.z;
+		(startPoint.z <= curPoint.z && curPoint.z <= endPoint.z);
 }
-int searchCurNode(vec3 curPoint) {
-	float index = 1.0;
-	while(true) {
-		for(float j = 0.0; j < 8.0; ++j) {
-			float normalizedIndex = (index+j)/float(octreeTextureLength);
-			vec3 nodeStartPoint = texture(octreeStartPointSampler, vec2(normalizedIndex, 0.5)).xyz;
-			vec3 nodeEndPoint = texture(octreeEndPointSampler, vec2(normalizedIndex, 0.5)).xyz;
-
+int searchCurNode(uvec3 curPoint) {
+	if(octreeTextureLength == 1) return 0;
+	int index = 1;
+	int loopCount = 0;
+	// 10 should be the maximum depth for octree
+	while(loopCount < 10) {
+		loopCount++;
+		for(int j = 0; j < 8; ++j) {
+			// adding 0.5 for precision purpose
+			float normalizedIndex = (float(index+j)+0.5)/float(octreeTextureLength);
+			uvec3 nodeStartPoint = texture(octreeStartPointSampler, vec2(normalizedIndex, 1)).xyz;
+			uvec3 nodeEndPoint = texture(octreeEndPointSampler, vec2(normalizedIndex, 1)).xyz;
+			
 			if(inNode(curPoint, nodeStartPoint, nodeEndPoint)) {
-				vec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 0.5)).rg;
-				bool isLeafNode = (tags.x == 0.0); 
-				if(isLeafNode) return int(index);
-				index = tags.x;
+				uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
+				bool isLeafNode = (int(tags.x) == 0); 
+				if(isLeafNode) return index;
+				index = int(tags.x);
 				break;
-			} 
+			}
 		}
 	}
-	return 0;
+	return 100;
 }
 void main(void) {
 	// fragColor = vec4(1, 0, 0, 0.1);
@@ -163,20 +170,35 @@ void main(void) {
 		if(gl_FragCoord.z > entryPointDepth) discard;
 		entryPoint = texCoord;
 		exitPoint = texture(approxExitPointSampler, normalizedFragPos.xy).xyz;
+		//exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+
 	} else if(skipMode == 2) {
 		// entry and exit point for full ray
 		entryPoint = texCoord;
 		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+		float normalizedIndex = 0.0/float(octreeTextureLength);
+		uvec4 tags = texture(octreeTagSampler, vec2(1.0/float(normalizedIndex), 1));
+		int occuClass = int(tags.y);
+		int nextChildIndex = int(tags.x);
+
+		uvec3 nodeStartPoint = texture(octreeStartPointSampler, vec2(normalizedIndex, 1)).xyz;
+		uvec3 nodeEndPoint = texture(octreeEndPointSampler, vec2(normalizedIndex, 1)).xyz;
 
 		vec3 octreeEntryPoint = entryPoint;
 		// find out which leaf node this point is in
-		vec3 entryPointDataSpace = vec3(
+		uvec3 entryPointDataSpace = uvec3(
 			entryPoint.x * xDim,
 			entryPoint.y * yDim,
 			entryPoint.z * zDim
 		);
+		
 		int curNodeIndex = searchCurNode(entryPointDataSpace);
-		fragColor = vec4(float(curNodeIndex)/255.0, 0, 0, 0.5);
+		if(curNodeIndex == 100) {
+			fragColor = vec4(0, 1, 0, 1);
+			return;
+		}
+		fragColor = vec4(float(curNodeIndex)/float(octreeTextureLength), 0, 0, 1);
+		
 		return;
 	}
 	// constant params

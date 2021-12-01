@@ -145,7 +145,7 @@ class App extends Widget {
 			// empty lines
 			for(var i = 0; i < lines.length/(3*12*2); ++i) {
 				if(occuClassArray[i] == 0) {
-					console.log("empty lines!")
+					//console.log("empty lines!")
 					var startIndex = i*3*12*2;
 					var endIndex = startIndex + 3*12*2;
 					var subArray = lines.slice(startIndex, endIndex+1)
@@ -307,7 +307,7 @@ class App extends Widget {
 	
 			if(this.rayCastingCheckBox.isChecked()) {
 				let brickSize = 16;
-				var skipMode = 3; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
+				var skipMode = 2; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
 				if(this.tfChanged) {
 					if(skipMode == 1) {
 						if(this.approxGeo == null) {
@@ -368,7 +368,6 @@ class App extends Widget {
 				}
 				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
 				//console.log(view.getCameraPosition())
-				return;
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
