@@ -3,20 +3,51 @@ const brickSize = 16;
 
 class Octree
 {
-    constructor(metaData, data, opacityTF)
+    constructor(metaData, data)
     {
+        this.init(metaData, data);
+    }
+    init(metaData, data) {
         this.root = new OctreeNode(null, [0,0,0], metaData.dims, 0, 0);
         //TODO: if dims is not power of 2
-        this.brickArray = null
         this.dataMin = metaData.min
         this.dataMax = metaData.max
         this.brickMetaDataArray = this.constructBrickMetaData(data, metaData.dims);
-
+        this.bfsArray = []
         //this.root.addChildren(this.root.startPoint, this.root.endPoint, metaData, data, opacityTF)
     }
     getRoot() {
         return this.root;
     }
+    getBfsArray() {
+        if(this.bfsArray == null && !this.nodeUpdated) return this.bfsArray
+        this.bfsArray = []
+        this.bfsArray.push({
+            startPoint: this.root.startPoint,
+            endPoint: this.root.endPoint,
+            firstChildrenIndex: 1,
+            occuClass: this.root.occuClass
+        });
+        var nextLayerArray = this.root.children;
+        while(nextLayerArray.length != 0) {
+            var thisLayerArray = nextLayerArray;
+            nextLayerArray = [];
+            for(var nodeIndex = 0; nodeIndex < thisLayerArray.length; ++nodeIndex) {
+                var curNode = thisLayerArray[nodeIndex];
+                if(!curNode.isLeafNode) nextLayerArray = nextLayerArray.concat(curNode.children)
+                this.bfsArray.push({
+                    startPoint: curNode.startPoint,
+                    endPoint: curNode.endPoint,
+                    firstChildrenIndex:     // 0 if is leaf node
+                        curNode.isLeafNode? 0:this.bfsArray.length + nodeIndex*8 + thisLayerArray.length - nodeIndex,
+                    occuClass: curNode.occuClass
+                })
+               
+            }
+        }
+        return this.bfsArray
+    }
+    
     getBoundingBoxGeometry() {
         // output geometry of leaf nodes
         if(this.brickArray == null || this.boxUpdated) this.brickArray = this.root.getBoundingBox();
@@ -29,12 +60,11 @@ class Octree
         return this.boxFacesArray;
     }
     updateOccuClass(metaData, opacityTF) {
-        console.log(opacityTF)
 
         this.root.updateOccuClass(metaData, this.brickMetaDataArray, opacityTF);
         this.boxUpdated = true;
         this.faceUpdated = true;
-
+        this.nodeUpdated = true;
     }
     // used to assign leaf node occupancy class
     constructBrickMetaData(data, dims) {
@@ -185,8 +215,6 @@ class OctreeNode
                     if(!empty) {
                         this.occuClass = 1;
                         return;
-                    } else {
-                        console.log("empty brick!")
                     }
 
                     // var dataIndex = i + j * dims[0] + k * dims[0] * dims[1]

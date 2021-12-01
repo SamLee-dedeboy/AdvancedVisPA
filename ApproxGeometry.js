@@ -106,7 +106,6 @@ class ApproxGeometry {
                 }
             }
         }
-        console.log(this.brickFacesArray)
         return this.brickFacesArray;
     }
     getBrickBoundingBoxGeometryDataSpace() {

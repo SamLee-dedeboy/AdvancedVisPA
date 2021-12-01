@@ -68,10 +68,15 @@ class VolRenderer {
         this.colTex = gl.createTexture();	// 1
         this.opcTex = gl.createTexture();   // 2
 		this.exitPointTexture = gl.createTexture();	// 3    
+		this.preIntTex = gl.createTexture(); // 4
+
+		this.depthTexture = gl.createTexture(); // 5
 		this.approxExitPointTexture = gl.createTexture(); // 6
 		this.approxEntryPointTexture = gl.createTexture(); // 7
-		this.preIntTex = gl.createTexture(); // 4
-		this.depthTexture = gl.createTexture(); // 5
+
+		this.octreeTagTexture = gl.createTexture(); // 8
+		this.octreeStartPointTexture = gl.createTexture(); // 9
+		this.octreeEndPointTexture = gl.createTexture(); // 10
 
         // buffers
 		this.depthBuffer = this.gl.createFramebuffer();
@@ -186,6 +191,7 @@ class VolRenderer {
 		cameraPosVec,
 		skipMode,
 		nonEmptyGeometry,
+		octreeBfsArray,
 		bboxFacesDataSpace,
 		dataSpaceToClipSpace,
 		worldSpaceToClipSpace,
@@ -198,7 +204,7 @@ class VolRenderer {
 		lightColor = [1.0, 1.0, 1.0],
 		sampleDistance
 	) {
-			if(skipMode == 1 || skipMode == 2) {
+			if(skipMode == 1) {
 				bboxFacesDataSpace = nonEmptyGeometry
 				if(bboxFacesDataSpace.length == 0) return;
 			}
@@ -233,7 +239,15 @@ class VolRenderer {
 			//glMatrix.vec3.negate(lightWorldPosition,lightWorldPosition);
 	
 			// render
-			if(skipMode == 1) {
+			if(skipMode == 0) {
+				this.renderBackfaces(
+					viewWidth, 
+					viewHeight, 
+					bboxFacesDataSpace, 
+					dataSpaceToClipSpace, 
+					dims
+				)
+			} else if(skipMode == 1) {
 				this.renderApproxEntryPoints(
 					viewWidth, 
 					viewHeight, 
@@ -246,8 +260,11 @@ class VolRenderer {
 					viewHeight, 
 					bboxFacesDataSpace, 
 					dataSpaceToClipSpace, 
-					dims)
-			} else if(skipMode == 0) {
+					dims
+				)
+			} else if(skipMode == 2) {
+				// set octree texture
+				this.setOctreeTexture(octreeBfsArray)
 				this.renderBackfaces(
 					viewWidth, 
 					viewHeight, 
@@ -292,6 +309,25 @@ class VolRenderer {
 			gl.activeTexture( gl.TEXTURE4 );
 			gl.bindTexture( gl.TEXTURE_2D, this.preIntTex );
 
+
+			gl.activeTexture( gl.TEXTURE5 );
+			gl.bindTexture( gl.TEXTURE_2D, this.depthTexture );
+	
+			gl.activeTexture( gl.TEXTURE6 );
+			gl.bindTexture( gl.TEXTURE_2D, this.approxExitPointTexture );
+	
+			gl.activeTexture( gl.TEXTURE7 );
+			gl.bindTexture( gl.TEXTURE_2D, this.approxEntryPointTexture );
+			
+			gl.activeTexture( gl.TEXTURE8 );
+			gl.bindTexture( gl.TEXTURE_2D, this.octreeTagTexture );
+
+			gl.activeTexture( gl.TEXTURE9 );
+			gl.bindTexture( gl.TEXTURE_2D, this.octreeStartPointTexture );
+
+			gl.activeTexture( gl.TEXTURE10 );
+			gl.bindTexture( gl.TEXTURE_2D, this.octreeEndPointTexture );
+
 			// buffer
 			gl.bindBuffer( gl.ARRAY_BUFFER, this.vertexBuffer );
 			gl.bufferData( gl.ARRAY_BUFFER, bboxFacesDataSpace, gl.DYNAMIC_DRAW, 0 );
@@ -307,6 +343,12 @@ class VolRenderer {
 			gl.uniform1i( gl.getUniformLocation( sp, "preIntSampler"), 4);
 			gl.uniform1i( gl.getUniformLocation( sp, "approxEntryPointDepthSampler"), 5);
 			gl.uniform1i( gl.getUniformLocation( sp, "approxExitPointSampler"), 6);
+			gl.uniform1i( gl.getUniformLocation( sp, "approxEntryPointSampler"), 7);
+
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeTagSampler"), 8);
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeStartPointSampler"), 9);
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeEntPointSampler"), 10);
+			gl.uniform1i( gl.getUniformLocation( sp, "octreeTextureLength"), octreeBfsArray == null? 0:octreeBfsArray.length);
 
 			gl.uniform1f( gl.getUniformLocation( sp, "sampleDistance" ), sampleDistance );
 			gl.uniform1i( gl.getUniformLocation(sp, "width"), viewWidth);
@@ -1638,6 +1680,70 @@ class VolRenderer {
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
 		gl.texParameterf( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+		return this
+	}
+	setOctreeTexture(octreeBfsArray) {
+		var gl = this.gl
+		var octreeStartPointArray = [];
+		var octreeEndPointArray = [];
+		var octreeTagsArray = [];
+		// construct start point array, end point array, tag array in rgb
+		for(var i = 0; i < octreeBfsArray.length; ++i) {
+			var node = octreeBfsArray[i];
+			// start point array
+			octreeStartPointArray = octreeStartPointArray.concat(node.startPoint.flat(1));
+
+			// end point array
+			octreeStartPointArray = octreeEndPointArray.concat(node.endPoint.flat(1));
+
+			// tag array
+			octreeTagsArray.push(node.firstChildrenIndex)
+			octreeTagsArray.push(node.occuClass)
+		}
+		// tag texture
+		gl.activeTexture( gl.TEXTURE8 );
+		gl.bindTexture(gl.TEXTURE_2D, this.octreeTagTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RG16UI, 
+			octreeTagsArray.length/2, 
+			1, 
+			0, 
+			gl.RG_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(octreeTagsArray)
+		);
+		
+		// start point texture
+		gl.activeTexture( gl.TEXTURE9 );
+		gl.bindTexture(gl.TEXTURE_2D, this.octreeStartPointTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGB16UI, 
+			octreeStartPointArray.length/3, 
+			1, 
+			0, 
+			gl.RGB_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(octreeStartPointArray)
+		);
+		// end point texture
+		gl.activeTexture( gl.TEXTURE10 );
+		gl.bindTexture(gl.TEXTURE_2D, this.octreeEndPointTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGB16UI, 
+			octreeEndPointArray.length/3, 
+			1, 
+			0, 
+			gl.RGB_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(octreeBfsArray)
+		);
+				
 		return this
 	}
 	setTF( colorTF, opacityTF )

@@ -287,35 +287,8 @@ class App extends Widget {
 		var dy = this.sliceViewY.sliceValue;
 		var dz = this.sliceViewZ.sliceValue;
 
-		if( this.bbCheckBox.isChecked() )
-		{
-			this.renderBoundingBox3d( view, view.getBoundingBoxGeometry( dims ), toClipSpace );
-		    this.VolRenderer.disableDepthTest();
-		}
-
-		if( this.axisCheckBox.isChecked() )
-		{
-			this.renderAxis3d( view, toClipSpace, dx, dy, dz );
-		}
-		
-		this.VolRenderer.enableDepthTest();
 		let MVP = view.dataSpaceToClipSpace( dims );
-		this.VolRenderer.setOpaque3DRenderState();
-		for( var i = 0; i < this.sliceViews.length; ++i )
-		{
-			continue;
-			let sv = this.sliceViews[ i ];
-			if( sv.getIsLinked() )
-			{
-				this.VolRenderer.renderCuttingSurface( 
-					view.getSize().x, 
-					view.getSize().y, 
-					sv.getPlaneGeometry( dims ), 
-					MVP,
-					this.metadata.dims );
-			}
-		}
-		
+
 		if ( this.volumeCheckBox.isChecked() )
 		{
 			this.VolRenderer.setTransparent3DRenderState();
@@ -334,13 +307,13 @@ class App extends Widget {
 	
 			if(this.rayCastingCheckBox.isChecked()) {
 				let brickSize = 16;
-				var skipMode = 1; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
+				var skipMode = 3; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
 				if(this.tfChanged) {
 					if(skipMode == 1) {
 						if(this.approxGeo == null) {
 							this.approxGeo = new ApproxGeometry(brickSize, {dims: dims, min: this.dataMin, max: this.dataMax}, this.data);
 						} 
-						
+
 						let nonEmptyCulling = this.approxGeo.getNonEmptyFacesGeometry(this.opcTfData)
 						this.nonEmptyGeometry = new Float32Array(nonEmptyCulling[0])
 						this.nonEmptyBoundingBox = new Float32Array(nonEmptyCulling[1])
@@ -376,20 +349,34 @@ class App extends Widget {
 						this.boxOccuClass = octreeFacesGeoWithOccuClass.occuClassArray;
 						
 						this.tfChanged = false;	
+						this.bfsArray = this.octree.getBfsArray();
+					} else if(skipMode == 3) {
+						if(this.sparseLeap == null) {
+							this.sparseLeap = new SparseLeap
+							(
+								{dims: dims, min: this.dataMin, max: this.dataMax},
+								this.data,
+								this.opcTfData
+							)	
+						} else {
+							this.sparseLeap.updateOccupancyHistogramTree({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
+						}
+						console.log("get new occupancy histogram tree", this.sparseLeap.occupancyHistogramTree.root)
+						this.tfChanged = false;	
 
 					}
 					
 				}
-				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
 				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
 				//console.log(view.getCameraPosition())
-				
+				return;
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
 					view.getCameraPosition(),
 					skipMode,
 					this.nonEmptyGeometry,
+					this.bfsArray,
 					view.getFacesGeometry(dims),
 					MVP,
 					 view.worldSpaceToClipSpace( dims ),
@@ -401,7 +388,8 @@ class App extends Widget {
 					view.getLightPositionWorldSpace(dims),
 					view.getLightColor(),
 					1 );
-				
+				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
+
 			} else {
 				this.VolRenderer.renderViewAlignedCuttingPlanes( 
 					view.getSize().x, 
@@ -418,6 +406,36 @@ class App extends Widget {
 					0.25 );
 			}
 		}
+
+		if( this.bbCheckBox.isChecked() )
+		{
+			this.renderBoundingBox3d( view, view.getBoundingBoxGeometry( dims ), toClipSpace );
+		    this.VolRenderer.disableDepthTest();
+		}
+
+		if( this.axisCheckBox.isChecked() )
+		{
+			this.renderAxis3d( view, toClipSpace, dx, dy, dz );
+		}
+		
+		this.VolRenderer.enableDepthTest();
+		this.VolRenderer.setOpaque3DRenderState();
+		for( var i = 0; i < this.sliceViews.length; ++i )
+		{
+			continue;
+			let sv = this.sliceViews[ i ];
+			if( sv.getIsLinked() )
+			{
+				this.VolRenderer.renderCuttingSurface( 
+					view.getSize().x, 
+					view.getSize().y, 
+					sv.getPlaneGeometry( dims ), 
+					MVP,
+					this.metadata.dims );
+			}
+		}
+		
+		
 		this.VolRenderer.renderLightSource(
 			view.getSize().x,
 			view.getSize().y,
