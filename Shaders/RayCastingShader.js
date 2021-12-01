@@ -71,7 +71,12 @@ uniform int preIntegrated;
 uniform int skipMode;
 out vec4 fragColor;
 in vec3 texCoord;
-
+struct octreeNode {
+	uvec3 startPoint;
+	uvec3 endPoint;
+	int index;
+	int occuClass;
+};
 vec3 centralDifferenceNormal(vec3 texCoord) {
 	float h_x = 1.0/xDim;
 	float h_y = 1.0/yDim;
@@ -132,8 +137,12 @@ bool inNode(uvec3 curPoint, uvec3 startPoint, uvec3 endPoint) {
 		&&
 		(startPoint.z <= curPoint.z && curPoint.z <= endPoint.z);
 }
-int searchCurNode(uvec3 curPoint) {
-	if(octreeTextureLength == 1) return 0;
+octreeNode searchCurNode(uvec3 curPoint) {
+	octreeNode targetNode;
+	if(octreeTextureLength == 1) {
+		targetNode.index = 0;
+		return targetNode;
+	}
 	int index = 1;
 	int loopCount = 0;
 	// 10 should be the maximum depth for octree
@@ -148,193 +157,228 @@ int searchCurNode(uvec3 curPoint) {
 			if(inNode(curPoint, nodeStartPoint, nodeEndPoint)) {
 				uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
 				bool isLeafNode = (int(tags.x) == 0); 
-				if(isLeafNode) return index;
+				if(isLeafNode) {
+					targetNode.startPoint = nodeStartPoint;
+					targetNode.endPoint = nodeEndPoint;
+					targetNode.index = index;
+					targetNode.occuClass = int(tags.y);
+					return targetNode;	
+				}
 				index = int(tags.x);
 				break;
 			}
 		}
 	}
-	return 100;
+	targetNode.index = -1;
+	return targetNode;
 }
+vec4 performRayCasting(vec3 entryPoint, vec3 exitPoint, vec3 dstColor, float dstAlpha) {
+		// constant params
+		vec3 dims = vec3(xDim, yDim, zDim);
+		vec3 fullRay = (exitPoint - entryPoint) * dims;
+		vec3 rayDirection = normalize(fullRay);
+		float totalDistance = length(fullRay);
+		int nSample = int(totalDistance/sampleDistance);
+		vec3 t0 = entryPoint * dims;
+		int preMultiplied = preIntegrated;
+	
+		// variable params
+		vec3 rayPos = t0;
+		// vec3 dstColor = vec3(0.0, 0.0, 0.0);
+		// float dstAlpha = 0.0;
+		vec3 newTexCoord = entryPoint;
+		vec3 lightColorMultiplied;
+		for(int i = preIntegrated; i < nSample; i++, rayPos += rayDirection * sampleDistance) {
+			float opacity;
+			vec3 color;
+			if(preIntegrated == 1) {
+				// pre integral
+				vec3 rayPosA = t0 + float(i-1) * rayDirection * sampleDistance;
+				vec3 rayPosB = t0 + float(i) * rayDirection * sampleDistance;
+	
+				vec3 tcA = rayPosA / dims;
+				vec3 tcB = rayPosB / dims;
+	
+				float normDataValueA = (texture(volSampler, tcA).r - dataMin) / (dataMax - dataMin);
+				float normDataValueB = (texture(volSampler, tcB).r - dataMin) / (dataMax - dataMin);
+				
+				newTexCoord = (tcA + tcB)/2.0;
+				vec4 preIntColor = texture(preIntSampler, vec2(normDataValueA, normDataValueB)).rgba;
+				opacity = preIntColor.a;
+				color = preIntColor.rgb;
+			} else {
+				newTexCoord = rayPos/dims;
+				float dataValue = texture(volSampler, newTexCoord).r;
+				float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
+				opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
+				color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
+			}
+			if(opacity == 0.0) continue;
+			
+			
+	
+			if(doLighting == 1) {
+				vec3 Ia = vec3( 1.0, 1.0, 1.0 );
+	
+				//  diffuse light color
+				vec3 Id = lightColor;
+	
+				//  specular light color
+				vec3 Is = lightColor;                
+	
+				//  ambient material color
+				vec3 Ma = color;
+	
+				//  diffuse material color
+				vec3 Md = color;
+	
+				// specular material color
+				vec3 Ms = color;
+				
+	
+				// amount of ambient light
+				float Ka = 0.3;
+	
+				// amount of diffuse light
+				float Kd = 0.8;
+	
+				// amount of specular light
+				float Ks = 0.8;
+					
+				// shininess of material, affects specular lighting
+				float shininess = 20.0;
+	
+				// sample point world space pos
+				vec3 sampleWorldSpace = (M_DATA_TO_WORLD_SPACE * vec4(
+					rayPos.x,
+					rayPos.y,
+					rayPos.z,
+					1.0
+				)).xyz;
+	
+				vec3 normal = centralDifferenceNormal(newTexCoord);
+	
+				// light dir
+				vec3 v_surfaceToLight =  sampleWorldSpace - lightWorldPosition;
+				vec3 surfaceToLightDirection = normalize(v_surfaceToLight);
+				
+				// cam dir
+				vec3 v_surfaceToCam = sampleWorldSpace - camWorldPosition;
+				vec3 surfaceToCamDirection = normalize(v_surfaceToCam);
+				
+				// half vec
+				vec3 halfVector = normalize(surfaceToLightDirection + surfaceToCamDirection);
+				
+				// light & spec
+				float lambertian = max(dot(normal, surfaceToLightDirection ), 0.0);
+				
+				
+				vec3 ambient = Ma * Ia;
+				vec3 diffuse = Md * Id * lambertian;
+	
+				vec3 specular = (lambertian <= 0.0) ? vec3(0.0) : Is * Ms * pow( max(dot(normal, halfVector), 0.0), shininess);
+				
+				// do lighting
+				color  = min(  Ka * ambient + Kd * diffuse + Ks * specular, vec3( 1.0 ) );
+		
+			}
+	
+		
+			float unitDist = 1.0;
+	
+			// correction
+			float srcAlphaCorrected = 1.0 - pow(1.0 - opacity, sampleDistance / unitDist);
+	
+			vec3 srcColorCorrected =  color *  ( sampleDistance / unitDist );
+	
+			if(preMultiplied == 0) {
+				srcColorCorrected *= opacity;
+			}
+	
+			// composite
+			dstAlpha += (1.0 - dstAlpha) * srcAlphaCorrected;
+			dstColor += (1.0 - dstAlpha) * srcColorCorrected;
+			
+			if(1.0 - dstAlpha == 0.0) break;
+			
+			// // move forward
+			// rayPos += rayDirection * sampleDistance;
+		}	
+		return vec4(dstColor, dstAlpha);
+	}
 void main(void) {
-	// fragColor = vec4(1, 0, 0, 0.1);
-	// return;
+
 	vec2 fragPos = gl_FragCoord.xy;
 	vec2 normalizedFragPos = fragPos / vec2(width, height);
 	vec3 entryPoint, exitPoint;
 	if(skipMode == 0) {
 		entryPoint = texCoord;
 		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+		fragColor = performRayCasting(entryPoint, exitPoint, vec3(0,0,0), 0.0);
 	} else if(skipMode == 1) {
 		float entryPointDepth = texture(approxEntryPointDepthSampler, normalizedFragPos.xy).x;
 		if(gl_FragCoord.z > entryPointDepth) discard;
 		entryPoint = texCoord;
 		exitPoint = texture(approxExitPointSampler, normalizedFragPos.xy).xyz;
 		//exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+		fragColor = performRayCasting(entryPoint, exitPoint, vec3(0,0,0), 0.0);
 
 	} else if(skipMode == 2) {
 		// entry and exit point for full ray
+		vec4 dstRGBA = vec4(0,0,0,0);
 		entryPoint = texCoord;
 		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
-		float normalizedIndex = 0.0/float(octreeTextureLength);
-		uvec4 tags = texture(octreeTagSampler, vec2(1.0/float(normalizedIndex), 1));
-		int occuClass = int(tags.y);
-		int nextChildIndex = int(tags.x);
+		vec3 dims = vec3(xDim, yDim, zDim);
+		vec3 fullRay = (exitPoint - entryPoint) * dims; // dataspace
+		float totalDistance = length(fullRay);
+		vec3 rayDirection = normalize(exitPoint - entryPoint);
 
-		uvec3 nodeStartPoint = texture(octreeStartPointSampler, vec2(normalizedIndex, 1)).xyz;
-		uvec3 nodeEndPoint = texture(octreeEndPointSampler, vec2(normalizedIndex, 1)).xyz;
+		vec3 nodeEntryPoint = entryPoint;
+		float renderedDistance = 0.0;
+		int i = 0;
+		while(i < 10) {
+			i++;
+			if(renderedDistance >= totalDistance) {
+				break;
+			}
+			// find out which leaf node this point is in
+			uvec3 nodeEntryPointDataSpace = uvec3(
+				nodeEntryPoint.x * xDim,
+				nodeEntryPoint.y * yDim,
+				nodeEntryPoint.z * zDim
+			);
+			octreeNode curNode = searchCurNode(nodeEntryPointDataSpace);
+			int curNodeIndex = curNode.index;
+			if(curNodeIndex == -1) {
+				fragColor = vec4(0, 1, 0, 1);
+				return;
+			}
+			// octreeExitPoint
+			uvec3 nodeDims = curNode.endPoint - curNode.startPoint;
+			float nodeDistance = totalDistance * (float(nodeDims.x)/float(dims.x));
+			renderedDistance += nodeDistance;
+			uvec3 nodeExitPointDataSpace = uvec3(rayDirection*nodeDistance) + nodeEntryPointDataSpace;
+			
+			vec3 nodeExitPoint = vec3(
+				float(nodeExitPointDataSpace.x)/xDim,
+				float(nodeExitPointDataSpace.y)/yDim,
+				float(nodeExitPointDataSpace.z)/zDim
 
-		vec3 octreeEntryPoint = entryPoint;
-		// find out which leaf node this point is in
-		uvec3 entryPointDataSpace = uvec3(
-			entryPoint.x * xDim,
-			entryPoint.y * yDim,
-			entryPoint.z * zDim
-		);
-		
-		int curNodeIndex = searchCurNode(entryPointDataSpace);
-		if(curNodeIndex == 100) {
-			fragColor = vec4(0, 1, 0, 1);
-			return;
+			);
+			// skip empty node
+			float normalizedIndex = (float(curNodeIndex)+0.5)/float(octreeTextureLength);
+			uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
+			int occuClass = int(tags.y);
+			if(occuClass != 0) { // non-empty
+				dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
+			} else {
+				nodeEntryPoint = nodeExitPoint + rayDirection*sampleDistance;
+			}
+			//fragColor = vec4(float(curNodeIndex)/float(octreeTextureLength), 0, 0, 1);
 		}
-		fragColor = vec4(float(curNodeIndex)/float(octreeTextureLength), 0, 0, 1);
-		
+		fragColor = dstRGBA;
 		return;
 	}
-	// constant params
-	vec3 dims = vec3(xDim, yDim, zDim);
-	vec3 fullRay = (exitPoint - entryPoint) * dims;
-	vec3 rayDirection = normalize(fullRay);
-	float totalDistance = length(fullRay);
-	int nSample = int(totalDistance/sampleDistance);
-	vec3 t0 = entryPoint * dims;
-	int preMultiplied = preIntegrated;
-
-	// variable params
-	vec3 rayPos = t0;
-	vec3 dstColor = vec3(0.0, 0.0, 0.0);
-	float dstAlpha = 0.0;
-	vec3 newTexCoord = entryPoint;
-	vec3 lightColorMultiplied;
-	for(int i = preIntegrated; i < nSample; i++, rayPos += rayDirection * sampleDistance) {
-		float opacity;
-		vec3 color;
-		if(preIntegrated == 1) {
-			// pre integral
-			vec3 rayPosA = t0 + float(i-1) * rayDirection * sampleDistance;
-			vec3 rayPosB = t0 + float(i) * rayDirection * sampleDistance;
-
-			vec3 tcA = rayPosA / dims;
-			vec3 tcB = rayPosB / dims;
-
-			float normDataValueA = (texture(volSampler, tcA).r - dataMin) / (dataMax - dataMin);
-			float normDataValueB = (texture(volSampler, tcB).r - dataMin) / (dataMax - dataMin);
-			
-			newTexCoord = (tcA + tcB)/2.0;
-			vec4 preIntColor = texture(preIntSampler, vec2(normDataValueA, normDataValueB)).rgba;
-			opacity = preIntColor.a;
-			color = preIntColor.rgb;
-		} else {
-			newTexCoord = rayPos/dims;
-			float dataValue = texture(volSampler, newTexCoord).r;
-			float normDataValue = (dataValue - dataMin) / (dataMax - dataMin);
-			opacity = texture(opcSampler, vec2(normDataValue, 0.5)).r;
-			color = texture(colSampler, vec2(normDataValue, 0.5)).rgb;
-		}
-		if(opacity == 0.0) continue;
-		
-		
-
-		if(doLighting == 1) {
-			vec3 Ia = vec3( 1.0, 1.0, 1.0 );
-
-			//  diffuse light color
-			vec3 Id = lightColor;
-
-			//  specular light color
-			vec3 Is = lightColor;                
-
-			//  ambient material color
-			vec3 Ma = color;
-
-			//  diffuse material color
-			vec3 Md = color;
-
-			// specular material color
-			vec3 Ms = color;
-			
-
-			// amount of ambient light
-			float Ka = 0.3;
-
-			// amount of diffuse light
-			float Kd = 0.8;
-
-			// amount of specular light
-			float Ks = 0.8;
-				
-			// shininess of material, affects specular lighting
-			float shininess = 20.0;
-
-			// sample point world space pos
-			vec3 sampleWorldSpace = (M_DATA_TO_WORLD_SPACE * vec4(
-				rayPos.x,
-				rayPos.y,
-				rayPos.z,
-				1.0
-			)).xyz;
-
-			vec3 normal = centralDifferenceNormal(newTexCoord);
-
-			// light dir
-			vec3 v_surfaceToLight =  sampleWorldSpace - lightWorldPosition;
-			vec3 surfaceToLightDirection = normalize(v_surfaceToLight);
-			
-			// cam dir
-			vec3 v_surfaceToCam = sampleWorldSpace - camWorldPosition;
-			vec3 surfaceToCamDirection = normalize(v_surfaceToCam);
-			
-			// half vec
-			vec3 halfVector = normalize(surfaceToLightDirection + surfaceToCamDirection);
-			
-			// light & spec
-			float lambertian = max(dot(normal, surfaceToLightDirection ), 0.0);
-			
-			
-			vec3 ambient = Ma * Ia;
-			vec3 diffuse = Md * Id * lambertian;
-
-			vec3 specular = (lambertian <= 0.0) ? vec3(0.0) : Is * Ms * pow( max(dot(normal, halfVector), 0.0), shininess);
-			
-			// do lighting
-			color  = min(  Ka * ambient + Kd * diffuse + Ks * specular, vec3( 1.0 ) );
-	
-		}
-
-	
-		float unitDist = 1.0;
-
-		// correction
-		float srcAlphaCorrected = 1.0 - pow(1.0 - opacity, sampleDistance / unitDist);
-
-		vec3 srcColorCorrected =  color *  ( sampleDistance / unitDist );
-
-		if(preMultiplied == 0) {
-			srcColorCorrected *= opacity;
-		}
-
-		// composite
-		dstAlpha += (1.0 - dstAlpha) * srcAlphaCorrected;
-		dstColor += (1.0 - dstAlpha) * srcColorCorrected;
-		
-		if(1.0 - dstAlpha == 0.0) break;
-		
-		// // move forward
-		// rayPos += rayDirection * sampleDistance;
-	}	
-	
-	fragColor = vec4(dstColor, dstAlpha);
-	//fragColor = vec4(1, 0, 0, 1);
 
 }`
 }
