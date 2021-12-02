@@ -360,35 +360,41 @@ class TFView extends Widget
 		ctx.save()
 		ctx.strokeStyle = 'rgb(128,128,128)'
 		ctx.beginPath()
-		//ctx.fillStyle = 'black'
-		var spline = this.spline
-	
-		for(var i = 0; i < spline.length-1; ++i) {
-			// var point = [W*(i/spline_length), H*(1-spline[i].y)]
-			// console.log(point[1])
-			// ctx.arc(point[0], point[1], 0.5, 0, 2 * Math.PI);
-			// ctx.fill();
-			
+		// spline
+		// var spline = this.spline
+
+		// for(var i = 0; i < spline.length-1; ++i) {
 		
-			// var pointA = [W*(i/spline_length), H*(1-spline[i].y)]
-			// var pointB = [W*((i+1)/spline_length), H*(1-spline[i+1].y)]
-			var pointA = [W*(spline[i].x), H*(1-spline[i].y)]
-			var pointB = [W*(spline[i+1].x), H*(1-spline[i+1].y)]
-			ctx.moveTo(pointA[0], pointA[1]);
-			ctx.lineTo(pointB[0], pointB[1]);
-			ctx.stroke();	
-		}
-		//console.log(spline[spline.length-1].y)
-		ctx.closePath()
-		// ctx.beginPath()
-		// for(var i = 0; i < sortedPoints.length-1; ++i) {
-		// 	var pointA = [sortedPoints[i].px * W, (1-sortedPoints[i].py) * H];
-		// 	var pointB = [sortedPoints[i+1].px * W, (1-sortedPoints[i+1].py) * H];
+		
+		// 	// var pointA = [W*(i/spline_length), H*(1-spline[i].y)]
+		// 	// var pointB = [W*((i+1)/spline_length), H*(1-spline[i+1].y)]
+		// 	var pointA = [W*(spline[i].x), H*(1-spline[i].y)]
+		// 	var pointB = [W*(spline[i+1].x), H*(1-spline[i+1].y)]
 		// 	ctx.moveTo(pointA[0], pointA[1]);
 		// 	ctx.lineTo(pointB[0], pointB[1]);
-		// 	ctx.stroke();		
+		// 	ctx.stroke();	
 		// }
 		// ctx.closePath()
+		// ctx.beginPath()
+		var sortedPoints = []
+		
+		for(var key in this.opacityControlPointElements) {
+			var point = this.opacityControlPointElements[key];
+			point.px = point.px < 0? 0:point.px
+			sortedPoints.push(point)
+		}
+		
+		sortedPoints.sort(function(a,b) {
+			return a.px - b.px;
+		})
+		for(var i = 0; i < sortedPoints.length-1; ++i) {
+			var pointA = [sortedPoints[i].px * W, (1-sortedPoints[i].py) * H];
+			var pointB = [sortedPoints[i+1].px * W, (1-sortedPoints[i+1].py) * H];
+			ctx.moveTo(pointA[0], pointA[1]);
+			ctx.lineTo(pointB[0], pointB[1]);
+			ctx.stroke();		
+		}
+		ctx.closePath()
 		ctx.restore();
 
     }
@@ -467,7 +473,9 @@ class TFView extends Widget
 		var sortedPoints = []
 		
 		for(var key in this.opacityControlPointElements) {
-			sortedPoints.push(this.opacityControlPointElements[key])
+			var point = this.opacityControlPointElements[key];
+			point.px = point.px < 0? 0:point.px
+			sortedPoints.push(point)
 		}
 		if(sortedPoints.length < 2) {
 			return
@@ -475,6 +483,20 @@ class TFView extends Widget
 		sortedPoints.sort(function(a,b) {
 			return a.px - b.px;
 		})
+		// linear
+		var count = 0;
+		for(var i = 0; i < sortedPoints.length-1; ++i) {
+			var normalizedWidth = (sortedPoints[i+1].px - sortedPoints[i].px)/sortedPoints[sortedPoints.length-1].px;
+			var increment = (sortedPoints[i+1].py - sortedPoints[i].py)/(normalizedWidth * this.opacityBuffer.length)
+			var steps = Math.ceil(normalizedWidth * this.opacityBuffer.length);
+			for(var j = 0; j < steps; ++j) {
+				if(j+count >= this.opacityBuffer.length) break;
+				this.opacityBuffer[j+count] = (increment*j + sortedPoints[i].py);
+			}
+			count += steps;
+		}
+		return;
+		// b-spline
 		let k = 3;
 		if(sortedPoints.length <= 4) {
 			k = sortedPoints.length-1
@@ -501,17 +523,24 @@ class TFView extends Widget
 		// for(var i = 2+n+1; i < n+k+1+1; ++i) {
 		// 	t[i] = 1
 		// }
-		var spline = new Array(spline_length)
+		var splineTmp = new Array(spline_length)
+		var spline = [];
+		console.log(spline_length)
 		for(var u = 0; u < spline_length; u++) {
 			//var ui = u*(t[n+1]-t[k-1])/(spline_length-1);
 			var ui = t[k-1] + u*(t[n+1]-t[k-1])/(spline_length-1);
 			
-			spline[u] = this.B_spline(n, ui, k, t, w)
+			splineTmp[u] = this.B_spline(n, ui, k, t, w)
+			if(u == 0) spline.push(splineTmp[u])
+			if(u>0&&splineTmp[u].x != splineTmp[u-1].x) {
+				spline.push(splineTmp[u])
+			}
 			//console.log(u/spline_length, spline_length*spline[u].x)
 		}
+		console.log(spline)
 		this.spline = spline
 		for(var i = 0; i < this.opacityBuffer.length; ++i) {
-			this.opacityBuffer[i] = spline[sample_rate*i].y
+			this.opacityBuffer[i] = spline[i].y
 		}
 		//console.log(this.opacityBuffer)
 	}
