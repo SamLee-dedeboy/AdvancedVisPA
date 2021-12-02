@@ -36,12 +36,16 @@ class Octree
             nextLayerArray = [];
             for(var nodeIndex = 0; nodeIndex < thisLayerArray.length; ++nodeIndex) {
                 var curNode = thisLayerArray[nodeIndex];
-                if(!curNode.isLeafNode) nextLayerArray = nextLayerArray.concat(curNode.children)
+                if(!curNode.isLeafNode) {
+                    nextLayerArray = nextLayerArray.concat(curNode.children)
+                }
+                var firstChildOffset = this.getchildrenCountBeforeIndex(thisLayerArray, nodeIndex)
+
                 this.bfsArray.push({
                     startPoint: curNode.startPoint,
                     endPoint: curNode.endPoint,
                     firstChildrenIndex:     // 0 if is leaf node
-                        curNode.isLeafNode? 0:this.bfsArray.length + nodeIndex*8 + thisLayerArray.length - nodeIndex,
+                        curNode.isLeafNode? 0:this.bfsArray.length + firstChildOffset + thisLayerArray.length - nodeIndex,
                     occuClass: curNode.occuClass
                 })
                
@@ -49,7 +53,13 @@ class Octree
         }
         return this.bfsArray
     }
-    
+    getchildrenCountBeforeIndex(nodeArray, index) {
+        var sum = 0;
+        for(var i = 0; i < index; ++i) {
+            sum+=nodeArray[i].children.length;
+        }
+        return sum;
+    }
     getBoundingBoxGeometry() {
         // output geometry of leaf nodes
         if(this.brickArray == null || this.boxUpdated) this.brickArray = this.root.getBoundingBox();
@@ -59,6 +69,7 @@ class Octree
     getFacesGeometry() {
         if(this.boxFacesArray == null || this.faceUpdated) this.boxFacesArray = this.root.getBoxFaces();
         this.faceUpdated = false;
+        console.log(this.boxFacesArray)
         return this.boxFacesArray;
     }
     updateOccuClass(metaData, opacityTF) {
