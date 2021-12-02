@@ -386,7 +386,7 @@ class App extends Widget {
 					view.getLightPositionWorldSpace(dims),
 					view.getLightColor(),
 					1 );
-				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
+				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
 
 			} else {
 				this.VolRenderer.renderViewAlignedCuttingPlanes( 

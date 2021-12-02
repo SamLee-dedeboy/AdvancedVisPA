@@ -8,11 +8,13 @@ class Octree
         this.init(metaData, data);
     }
     init(metaData, data) {
+        //var endPoint = [metaData.dims[0]+1, metaData.dims[1]+1, metaData.dims[2]+1];
         this.root = new OctreeNode(null, [0,0,0], metaData.dims, 0, 0);
         //TODO: if dims is not power of 2
         this.dataMin = metaData.min
         this.dataMax = metaData.max
         this.brickMetaDataArray = this.constructBrickMetaData(data, metaData.dims);
+        console.log(this.brickMetaDataArray)
         this.bfsArray = []
         //this.root.addChildren(this.root.startPoint, this.root.endPoint, metaData, data, opacityTF)
     }
@@ -208,8 +210,8 @@ class OctreeNode
                 for(var k = brickStartIndex[2]; k < brickEndIndex[2]; k++) {
                     var brickIndex = i*brickNum.y*brickNum.z + brickNum.z * j + k;
                     
-                    var brickMin = brickMetaDataArray[brickIndex].brickMin;
-                    var brickMax = brickMetaDataArray[brickIndex].brickMax;
+                    brickMin = brickMetaDataArray[brickIndex].brickMin;
+                    brickMax = brickMetaDataArray[brickIndex].brickMax;
 
                     var empty = this.checkBrickEmpty(brickMin, brickMax, metaData , opacityTF)
                     if(!empty) {

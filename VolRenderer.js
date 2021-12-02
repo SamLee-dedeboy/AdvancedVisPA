@@ -1695,9 +1695,7 @@ class VolRenderer {
 			var node = octreeBfsArray[i];
 			// start point array
 			octreeStartPointArray = octreeStartPointArray.concat(node.startPoint.flat(1));
-			if(node.startPoint[0] == 32 && node.startPoint[1] == 32 && node.startPoint[2] == 64) {
-				console.log(i, node)
-			}
+			
 			// end point array	
 			octreeEndPointArray = octreeEndPointArray.concat(node.endPoint.flat(1));
 
@@ -1705,7 +1703,6 @@ class VolRenderer {
 			octreeTagsArray.push(node.firstChildrenIndex)
 			octreeTagsArray.push(node.occuClass)
 		}
-		console.log(octreeEndPointArray[45*3], octreeEndPointArray[45*3+1], octreeEndPointArray[45*3+2])
 		// tag texture
 		gl.activeTexture( gl.TEXTURE8 );
 		gl.bindTexture(gl.TEXTURE_2D, this.octreeTagTexture)
