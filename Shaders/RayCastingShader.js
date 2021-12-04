@@ -511,7 +511,7 @@ void main(void) {
 		vec4 dstRGBA = vec4(0,0,0,0);
 		entryPoint = texCoord;
 		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
-		fragColor = performRayCasting(entryPoint, exitPoint, vec3(0,0,0), 0.0);
+		//fragColor = performRayCasting(entryPoint, exitPoint, vec3(0,0,0), 0.0);
 
 		vec3 dims = vec3(xDim, yDim, zDim);
 		vec3 entryPointDataSpace = vec3(
@@ -542,7 +542,7 @@ void main(void) {
 				nodeEntryPoint.y * yDim,
 				nodeEntryPoint.z * zDim
 			);
-			searchCurNode(nodeEntryPointDataSpace);
+			searchCurNode(nodeEntryPointDataSpace+rayDirection*sampleDistance);
 			octreeNode curNode = octreeCurNode;
 			int curNodeIndex = curNode.index;
 			if(curNodeIndex == -1) {
@@ -566,7 +566,7 @@ void main(void) {
 				} 
 			} else {
 				//fragColor = vec4(1, 0, 0, 0.5);
-				//return;
+				return;
 			}
 			
 			float nodeDistance = length(vec3(nodeExitPointDataSpace) - vec3(nodeEntryPointDataSpace));
@@ -577,14 +577,14 @@ void main(void) {
 				float(nodeExitPointDataSpace.y)/yDim,
 				float(nodeExitPointDataSpace.z)/zDim
 			);
-			nodeExitPoint += rayDirection*sampleDistance/dims;
+			//nodeExitPoint += rayDirection*sampleDistance/dims;
 			// skip empty node
 			float normalizedIndex = (float(curNodeIndex)+0.5)/float(octreeTextureLength);
 			uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
 			int occuClass = int(tags.y);
 
-			if(occuClass != 0) { // non-empty
-				//dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
+			if(occuClass != 0 || true) { // non-empty
+				dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
 			} 
 			octreeDepth++;
 
@@ -594,9 +594,9 @@ void main(void) {
 			//fragColor = vec4(float(curNodeIndex)/float(octreeTextureLength), 0, 0, 1);
 		}
 		//fragColor = vec4(1, 0, 0, 0.5);
-		//fragColor = dstRGBA;
-		float normalizedDepth = float(octreeDepth)/10.0;
-		fragColor.rgb *= normalizedDepth;
+		fragColor = dstRGBA;
+		//float normalizedDepth = float(octreeDepth)/10.0;
+		//fragColor.rgb *= normalizedDepth;
 		return;
 	} else if(skipMode == 3) {
 
