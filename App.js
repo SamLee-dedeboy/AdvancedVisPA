@@ -114,6 +114,7 @@ class App extends Widget {
 
 	renderBoundingBox3d( view, lines, MVP , occuClassArray = null)
 	{
+		console.log(occuClassArray)
 		//occuClassArray = null
 		if(occuClassArray == null) {
 			this.VolRenderer.render( 
@@ -145,7 +146,7 @@ class App extends Widget {
 			// empty lines
 			for(var i = 0; i < lines.length/(3*12*2); ++i) {
 				if(occuClassArray[i] == 0) {
-					//console.log("empty lines!")
+					//console.log("empty lines!", lines)
 					var startIndex = i*3*12*2;
 					var endIndex = startIndex + 3*12*2;
 					var subArray = lines.slice(startIndex, endIndex+1)
@@ -154,7 +155,7 @@ class App extends Widget {
 						view.getSize().y, 
 						subArray, 
 						MVP,
-						[ 0, 1, 0, 1.0 ],
+						[ 1, 0, 0, 1.0 ],
 						this.VolRenderer.gl.LINES,
 						2.0 
 					); 
@@ -307,7 +308,7 @@ class App extends Widget {
 	
 			if(this.rayCastingCheckBox.isChecked()) {
 				let brickSize = 16;
-				var skipMode = 2; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
+				var skipMode = 3; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
 				if(this.tfChanged) {
 					if(skipMode == 1) {
 						if(this.approxGeo == null) {
@@ -333,9 +334,9 @@ class App extends Widget {
 								{dims: dims, min: this.dataMin, max: this.dataMax},
 								this.data,
 							)
-						} else {
-							this.octree.updateOccuClass({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
-						}
+						} 
+						this.octree.updateOccuClass({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
+						
 						console.log("get new octree!", this.octree.root);
 
 						var octreeBoxGeoWithOccuClass = this.octree.getBoundingBoxGeometry()
@@ -346,7 +347,6 @@ class App extends Widget {
 						let octreeFacesGeoWithOccuClass = this.octree.getFacesGeometry();
 						this.nonEmptyGeometry = new Float32Array(octreeFacesGeoWithOccuClass.geometry.flat(1));
 						this.boxOccuClass = octreeFacesGeoWithOccuClass.occuClassArray;
-						
 						this.tfChanged = false;	
 						this.bfsArray = this.octree.getBfsArray();
 					} else if(skipMode == 3) {
@@ -356,18 +356,22 @@ class App extends Widget {
 								{dims: dims, min: this.dataMin, max: this.dataMax},
 								this.data,
 							)	
-						} else {
-							this.occupancyGeometry = this.sparseLeap.updateOccupancyGeometry({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
-						}
+						} 
+						this.occupancyGeometry = this.sparseLeap.updateOccupancyGeometry({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
+						var occuGeoBoxWithOccuClass = this.sparseLeap.getGeometryBoundingBox()
+						this.nonEmptyBoundingBox = new Float32Array(occuGeoBoxWithOccuClass.geometry);
+						this.boxOccuClass = occuGeoBoxWithOccuClass.occuClassArray;
 						console.log("get new occupancy histogram geometry", this.occupancyGeometry)
-						
 						this.tfChanged = false;	
 
 					}
 					
 				}
-				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace);
+				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
 				//console.log(view.getCameraPosition())
+				if(skipMode == 3) {
+					this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
+				}
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
@@ -375,6 +379,8 @@ class App extends Widget {
 					skipMode,
 					this.nonEmptyGeometry,
 					this.bfsArray,
+					this.visibilityOrderArray,
+					this.occupancyGeometry,
 					view.getFacesGeometry(dims),
 					MVP,
 					 view.worldSpaceToClipSpace( dims ),
@@ -386,7 +392,7 @@ class App extends Widget {
 					view.getLightPositionWorldSpace(dims),
 					view.getLightColor(),
 					1 );
-				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
+				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
 
 			} else {
 				this.VolRenderer.renderViewAlignedCuttingPlanes( 

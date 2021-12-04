@@ -228,7 +228,13 @@ class VolView3d extends Canvas2dView
         glMatrix.vec4.transformMat4( posVector, posVector, toWorldSpace  );  
         return [ posVector[ 0 ], posVector[ 1 ], posVector[ 2 ] ];
     }
-
+    worldSpacePositionToDataSpaceVector( dims, pos )
+    {
+        let toDataSpace = this.worldSpaceToDataSpace( dims );
+        var posVector = glMatrix.vec4.fromValues( pos[ 0 ], pos[ 1 ], pos[ 2 ], 1.0 );
+        glMatrix.vec4.transformMat4( posVector, posVector, toDataSpace  );  
+        return [ posVector[ 0 ], posVector[ 1 ], posVector[ 2 ] ];
+    }
     dataSpacePositionToScreenSpacePos( dims, pos )
     {
         let toClipSpace = this.dataSpaceToClipSpace(dims);
@@ -541,6 +547,15 @@ class VolView3d extends Canvas2dView
             p.y,            
             p.z        
         );
+    }
+    getCameraPositionDataSpace(dims) {
+        var cameraPosition = [
+            this.camera.position.x,
+            this.camera.position.y,
+            this.camera.position.z,
+
+        ]
+        return this.worldSpacePositionToDataSpaceVector(dims, cameraPosition)
     }
     getCamFrustumPlane() {
         return {

@@ -50,7 +50,15 @@ uniform highp usampler2D octreeTagSampler;
 uniform highp usampler2D octreeStartPointSampler;
 uniform highp usampler2D octreeEndPointSampler;
 
+// occupancy geometry
+uniform highp usampler2D occuGeoTagSampler;
+uniform highp usampler2D occuGeoStartPointSampler;
+uniform highp usampler2D occuGeoEndPointSampler;
+uniform highp usampler2D visibilityOrderSampler;
+
 uniform int octreeTextureLength;
+uniform int visibilityOrderLength;
+
 uniform float xDim;
 uniform float yDim;
 uniform float zDim;
@@ -71,12 +79,22 @@ uniform int preIntegrated;
 uniform int skipMode;
 out vec4 fragColor;
 in vec3 texCoord;
+
+#define MAX_RAYEVENTLIST_SIZE 100
 struct octreeNode {
 	uvec3 startPoint;
 	uvec3 endPoint;
 	int index;
 	int occuClass;
 };
+struct rayEvent {
+	float depth;
+	int type;
+	int occuClass;
+};
+
+rayEvent rayEventList[MAX_RAYEVENTLIST_SIZE];
+
 vec3 centralDifferenceNormal(vec3 texCoord) {
 	float h_x = 1.0/xDim;
 	float h_y = 1.0/yDim;
@@ -129,13 +147,18 @@ vec3 centralDifferenceNormal(vec3 texCoord) {
 
 	return normal;
 }
-bool inNode(uvec3 curPoint, uvec3 startPoint, uvec3 endPoint) {
+float abs(float x) {
+	if(x < 0.0) return -x;
+	return x;
+}
+bool inNode(vec3 curPoint, vec3 startPoint, vec3 endPoint) {
 	return
-		(startPoint.x <= curPoint.x && curPoint.x <= endPoint.x)
+		(startPoint.x < curPoint.x || (abs(startPoint.x - curPoint.x) < 1.0)) && (curPoint.x < endPoint.x || (abs(endPoint.x - curPoint.x) < 1.0))
 		&&
-		(startPoint.y <= curPoint.y && curPoint.y <= endPoint.y)
+		(startPoint.y < curPoint.y || (abs(startPoint.y - curPoint.y) < 1.0)) && (curPoint.y < endPoint.y || (abs(endPoint.y - curPoint.y) < 1.0))
 		&&
-		(startPoint.z <= curPoint.z && curPoint.z <= endPoint.z);
+		(startPoint.z < curPoint.z || (abs(startPoint.z - curPoint.z) < 1.0)) && (curPoint.z < endPoint.z || (abs(endPoint.z - curPoint.z) < 1.0));
+		
 }
 octreeNode searchCurNode(uvec3 curPoint) {
 	octreeNode targetNode;
@@ -154,7 +177,7 @@ octreeNode searchCurNode(uvec3 curPoint) {
 			uvec3 nodeStartPoint = texture(octreeStartPointSampler, vec2(normalizedIndex, 1)).xyz;
 			uvec3 nodeEndPoint = texture(octreeEndPointSampler, vec2(normalizedIndex, 1)).xyz;
 			
-			if(inNode(curPoint, nodeStartPoint, nodeEndPoint)) {
+			if(inNode(vec3(curPoint), vec3(nodeStartPoint), vec3(nodeEndPoint))) {
 				uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
 				bool isLeafNode = (int(tags.x) == 0); 
 				if(isLeafNode) {
@@ -307,45 +330,157 @@ vec4 performRayCasting(vec3 entryPoint, vec3 exitPoint, vec3 dstColor, float dst
 	return vec4(dstColor, dstAlpha);
 }
 bool getIntersection(float fDst1, float fDst2, vec3 p1, vec3 p2, out vec3 hit) {
-	if ( (fDst1 * fDst2) >= 0.0f) return false;
+	if ( (fDst1 * fDst2) > 0.0f) return false;
 	if ( fDst1 == fDst2) return false; 
 	hit = p1 + (p2-p1) * ( -fDst1/(fDst2-fDst1) );
 	return true;
 }
 	
 bool inBox( vec3 hit, vec3 b1, vec3 b2, int axis) {
-	if ( axis==1 && hit.z > b1.z && hit.z < b2.z && hit.y > b1.y && hit.y < b2.y) return true;
-	if ( axis==2 && hit.z > b1.z && hit.z < b2.z && hit.x > b1.x && hit.x < b2.x) return true;
-	if ( axis==3 && hit.x > b1.x && hit.x < b2.x && hit.y > b1.y && hit.y < b2.y) return true;
+	if ( axis==1 && hit.z >= b1.z && hit.z <= b2.z && hit.y >= b1.y && hit.y <= b2.y) return true;
+	if ( axis==2 && hit.z >= b1.z && hit.z <= b2.z && hit.x >= b1.x && hit.x <= b2.x) return true;
+	if ( axis==3 && hit.x >= b1.x && hit.x <= b2.x && hit.y >= b1.y && hit.y <= b2.y) return true;
 	return false;
 }
-	
+
+vec3 linePlaneIntersec(vec3 p0, vec3 p1, vec3 planePoint, vec3 planeNormal) {
+	if(dot(p0, planeNormal) > dot(p1, planeNormal)) {
+		vec3 tmp = p0;
+		p0 = p1;
+		p1 = tmp;
+	}
+	vec3 u = p1-p0;
+	float dotResult = dot(planeNormal, u);
+	vec3 result = vec3(0,0,0);
+	if(dotResult > 0.01) {
+		vec3 w = p0 - planePoint;
+		float factor = -dot(planeNormal, w)/dotResult;
+		u = u*factor;
+		return p0+u;
+	}
+	return vec3(-1, -1, -1);
+
+}
 // returns true if line (L1, L2) intersects with the box (B1, B2)
 // returns intersection point in Hit
-bool checkLineBox( vec3 B1, vec3 B2, vec3 L1, vec3 L2, out vec3 Hit) {
-	if (L2.x < B1.x && L1.x < B1.x) return false;
-	if (L2.x > B2.x && L1.x > B2.x) return false;
-	if (L2.y < B1.y && L1.y < B1.y) return false;
-	if (L2.y > B2.y && L1.y > B2.y) return false;
-	if (L2.z < B1.z && L1.z < B1.z) return false;
-	if (L2.z > B2.z && L1.z > B2.z) return false;
-	if (L1.x > B1.x && L1.x < B2.x &&
-		L1.y > B1.y && L1.y < B2.y &&
-		L1.z > B1.z && L1.z < B2.z) 
-		{
-			Hit = L1; 
-			return true;
-		}
-	if ( (getIntersection( L1.x-B1.x, L2.x-B1.x, L1, L2, Hit) && inBox( Hit, B1, B2, 1 ))
-		|| (getIntersection( L1.y-B1.y, L2.y-B1.y, L1, L2, Hit) && inBox( Hit, B1, B2, 2 )) 
-		|| (getIntersection( L1.z-B1.z, L2.z-B1.z, L1, L2, Hit) && inBox( Hit, B1, B2, 3 )) 
-		|| (getIntersection( L1.x-B2.x, L2.x-B2.x, L1, L2, Hit) && inBox( Hit, B1, B2, 1 )) 
-		|| (getIntersection( L1.y-B2.y, L2.y-B2.y, L1, L2, Hit) && inBox( Hit, B1, B2, 2 )) 
-		|| (getIntersection( L1.z-B2.z, L2.z-B2.z, L1, L2, Hit) && inBox( Hit, B1, B2, 3 )))
-		return true;
+bool checkLineBox( vec3 B1, vec3 B2, vec3 L1, vec3 L2, out vec3 entryPoint, out vec3 exitPoint) {
+	
+	vec3 xyNormal = vec3(0, 0, 1);
+	vec3 xzNormal = vec3(0, 1, 0);
+	vec3 yzNormal = vec3(1, 0, 0);
 
+	int pointCount = 0;
+	bool findOne = false;
+
+	vec3 p1 = linePlaneIntersec(L1, L2, B1, xyNormal);	// xy, z=0
+	
+	vec3 p2 = linePlaneIntersec(L1, L2, B2, xyNormal);	// xy, z=1
+
+	vec3 p3 = linePlaneIntersec(L1, L2, B1, xzNormal);	// xz, y=0
+
+	vec3 p4 = linePlaneIntersec(L1, L2, B2, xzNormal);	// xz, y=1
+
+	vec3 p5 = linePlaneIntersec(L1, L2, B1, yzNormal);	// yz, x=0
+
+	vec3 p6 = linePlaneIntersec(L1, L2, B2, yzNormal);	// yz, x=1
+
+	vec3 points[6] = vec3[6](p1, p2, p3, p4, p5, p6);
+	for(int i = 0; i < 6; ++i) {
+		if(inNode(vec3(points[i]), B1, B2)) {
+			pointCount++;
+
+			if(findOne) {
+				exitPoint = vec3(points[i]);
+				return true;
+			} else {
+				entryPoint = vec3(points[i]);
+				findOne = true;
+			}
+		}
+	}
 	return false;
+	// if(!findOne) return false;
+	
+	
+	// return false;
+	// if (L2.x < B1.x && L1.x < B1.x) return false;
+	// if (L2.x > B2.x && L1.x > B2.x) return false;
+
+	// if (L2.y < B1.y && L1.y < B1.y) return false;
+	// if (L2.y > B2.y && L1.y > B2.y) return false;
+
+	// if (L2.z < B1.z && L1.z < B1.z) return false;
+	// if (L2.z > B2.z && L1.z > B2.z) return false;
+
+	// if (L1.x > B1.x && L1.x < B2.x &&
+	// 	L1.y > B1.y && L1.y < B2.y &&
+	// 	L1.z > B1.z && L1.z < B2.z) 
+	// 	{
+	// 		Hit = L1; 
+	// 		return true;
+	// 	}	
+
+	// bool result = false;
+	// if ( (getIntersection( L1.x-B1.x, L2.x-B1.x, L1, L2, entryPoint) && inBox( entryPoint, B1, B2, 1 ))
+	// 	|| (getIntersection( L1.y-B1.y, L2.y-B1.y, L1, L2, entryPoint) && inBox( entryPoint, B1, B2, 2 )) 
+	// 	|| (getIntersection( L1.z-B1.z, L2.z-B1.z, L1, L2, entryPoint) && inBox( entryPoint, B1, B2, 3 )) 
+	// ) {
+	// 	result = true;
+	// }
+	// if( (getIntersection( L1.x-B2.x, L2.x-B2.x, L1, L2, exitPoint) && inBox( exitPoint, B1, B2, 1 )) 
+	// 	|| (getIntersection( L1.y-B2.y, L2.y-B2.y, L1, L2, exitPoint) && inBox( exitPoint, B1, B2, 2 )) 
+	// 	|| (getIntersection( L1.z-B2.z, L2.z-B2.z, L1, L2, exitPoint) && inBox( exitPoint, B1, B2, 3 ))) {
+	// 		result = true;
+	// 	}
+	// return result;
 }
+int mergeRayEvent(float depth, int type, int occuClass, out int rayEventNum) {
+	return 0;
+	if(rayEventNum == 0) return 0;
+
+	rayEvent eventPrev = rayEventList[rayEventNum-1];
+	if(eventPrev.depth == depth) {
+		if(eventPrev.type == type) {	// both exit/entry
+			// overwrite last ray event
+			rayEventList[rayEventNum-1].depth = depth;
+			rayEventList[rayEventNum-1].occuClass = occuClass;
+			return 1;
+		} else if(type == 1) {	// entry, exit
+			// delete last ray event
+			rayEventNum--;
+			return 1;
+		} else if(type == 0) {
+			if(rayEventNum < 2) return 0;
+			rayEvent eventPrevPrev = rayEventList[rayEventNum-2];
+			if(eventPrevPrev.occuClass == occuClass) {
+				// delete last event
+				rayEventNum--;
+				return 1;
+			}
+		}
+	}
+	return 0;
+
+}
+void addRayEvent(float depth, int type, int occuClass, out int rayEventNum) {
+	rayEvent newEvent;
+		newEvent.depth = depth;
+		newEvent.type = type;
+		newEvent.occuClass = occuClass;
+		rayEventList[rayEventNum] = newEvent;
+		rayEventNum = rayEventNum + 1;
+	return;
+	int mergeFlag = mergeRayEvent(depth, type, occuClass, rayEventNum);
+	if(mergeFlag == 0) {	// no merging or deletion happens
+		rayEvent newEvent;
+		newEvent.depth = depth;
+		newEvent.type = type;
+		newEvent.occuClass = occuClass;
+		rayEventList[rayEventNum] = newEvent;
+		rayEventNum = rayEventNum + 1;
+	}
+}
+
 void main(void) {
 
 	vec2 fragPos = gl_FragCoord.xy;
@@ -403,26 +538,19 @@ void main(void) {
 			octreeNode curNode = searchCurNode(nodeEntryPointDataSpace);
 			int curNodeIndex = curNode.index;
 			if(curNodeIndex == -1) {
-				fragColor = vec4(0, 1, 0, 1);
+				fragColor = vec4(0, 0, 1, 1);
 				return;
 			}
 			// octreeExitPoint
 			vec3 nodeExitPointDataSpace = vec3(0,0,0);
+			vec3 tmp = vec3(0,0,0);
 			// calculate intersection point of line (entry,exit) and box curNode
-			if(checkLineBox(vec3(curNode.startPoint), vec3(curNode.endPoint), entryPointDataSpace, exitPointDataSpace, nodeExitPointDataSpace) == false) {
-				nodeExitPointDataSpace = vec3(nodeEntryPointDataSpace) + rayDirection*sampleDistance*dims;
+			if(checkLineBox(vec3(curNode.startPoint), vec3(curNode.endPoint), entryPointDataSpace, exitPointDataSpace, tmp, nodeExitPointDataSpace) == false) {
+				//nodeExitPointDataSpace = vec3(nodeEntryPointDataSpace) + rayDirection*sampleDistance*dims;
+				
+				nodeExitPointDataSpace = vec3(nodeEntryPointDataSpace);
+				return;
 			}
-			// int j = 0;
-			// while(j < 1000) {
-			// 	j++;
-			// 	if(!inNode(nodeExitPointDataSpace, curNode.startPoint, curNode.endPoint)) {
-			// 		fragColor = vec4(j, 0, 0, 0.5);
-			// 		return;
-			// 		nodeExitPointDataSpace += uvec3(rayDirection*sampleDistance);
-			// 	}
-			// }
-			// nodeExitPointDataSpace -= uvec3(rayDirection*sampleDistance);
-		
 			
 			float nodeDistance = length(vec3(nodeExitPointDataSpace) - vec3(nodeEntryPointDataSpace));
 			renderedDistance += nodeDistance;
@@ -432,18 +560,134 @@ void main(void) {
 				float(nodeExitPointDataSpace.y)/yDim,
 				float(nodeExitPointDataSpace.z)/zDim
 			);
-			nodeExitPoint += rayDirection*sampleDistance;
+			nodeExitPoint += rayDirection*sampleDistance/dims;
 			// skip empty node
 			float normalizedIndex = (float(curNodeIndex)+0.5)/float(octreeTextureLength);
 			uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
 			int occuClass = int(tags.y);
+
 			if(occuClass != 0) { // non-empty
 				dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
-			} else {
-				nodeEntryPoint = nodeExitPoint;
-				//nodeEntryPoint = nodeExitPoint + rayDirection*sampleDistance;
-			}
+			} 
+
+			nodeEntryPoint = nodeExitPoint;
+			//nodeEntryPoint = nodeExitPoint + rayDirection*sampleDistance/dims;
+			
 			//fragColor = vec4(float(curNodeIndex)/float(octreeTextureLength), 0, 0, 1);
+		}
+		//fragColor = vec4(1, 0, 0, 0.5);
+		fragColor = dstRGBA;
+		return;
+	} else if(skipMode == 3) {
+
+		entryPoint = texCoord;
+		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+		vec3 dims = vec3(xDim, yDim, zDim);
+		vec3 entryPointDataSpace = vec3(
+			entryPoint.x * dims.x,
+			entryPoint.y * dims.y,
+			entryPoint.z * dims.z
+		);
+		vec3 exitPointDataSpace = vec3(
+			exitPoint.x * dims.x,
+			exitPoint.y * dims.y,
+			exitPoint.z * dims.z
+		);
+		vec3 fullRay = (exitPoint - entryPoint) * dims; // dataspace
+		float totalDistance = length(fullRay);
+		vec3 rayDirection = normalize(exitPoint - entryPoint);
+
+		vec3 nodeEntryPoint = entryPoint;
+		int occuGeoLength = visibilityOrderLength/2;
+		int rayEventNum = 0;
+
+			
+		vec3 hit = vec3(0,0,0);
+		
+	
+		int merged = 0;
+		int voIndex = 0;
+		int intersected = 0;
+		for(voIndex = 0; voIndex < visibilityOrderLength; ++voIndex) {
+	
+			float normalizedVoIndex = (float(voIndex) + 0.5)/float(visibilityOrderLength);
+			uvec2 nodeGeoDoublet = texture(visibilityOrderSampler, vec2(normalizedVoIndex, 1)).xy;
+			int nodeIndex = int(nodeGeoDoublet.x);
+			int nodeType = int(nodeGeoDoublet.y); // 0=front / 1=back
+			
+			float normalizedNodeIndex = (float(nodeIndex) + 0.5)/float(occuGeoLength);
+			
+			uvec3 nodeStartPoint = texture(occuGeoStartPointSampler, vec2(normalizedNodeIndex, 1)).xyz;
+			uvec3 nodeEndPoint = texture(occuGeoEndPointSampler, vec2(normalizedNodeIndex, 1)).xyz;
+			uvec3 nodeTags = texture(occuGeoTagSampler, vec2(normalizedNodeIndex, 1)).rgb;
+			vec3 hit = vec3(0,0,0);
+			vec3 nodeEntryPointDataSpace = vec3(0,0,0);
+			vec3 nodeExitPointDataSpace = vec3(0,0,0);
+			float lastDepth = 0.0;
+			
+			if(checkLineBox(vec3(nodeStartPoint), vec3(nodeEndPoint), entryPointDataSpace, exitPointDataSpace, nodeEntryPointDataSpace, nodeExitPointDataSpace)) {
+				intersected++;
+				// might need to swap entry and exit point base on view direction
+				float entryDistance = length(nodeEntryPointDataSpace - entryPointDataSpace);
+				float exitDistance = length(nodeExitPointDataSpace - entryPointDataSpace);
+				if(entryDistance > exitDistance) {
+					// swap
+					vec3 tmp = nodeEntryPointDataSpace;
+					nodeEntryPointDataSpace = nodeExitPointDataSpace;
+					nodeExitPointDataSpace = tmp;
+				} 
+				// generate ray event
+				// calculate depth in data space
+				float depth = 0.0;
+				int rayEventOccuClass = 0;
+			
+				if(nodeType == 0) { // front face
+					depth = length(vec3(nodeEntryPointDataSpace) - entryPointDataSpace)/totalDistance;
+					rayEventOccuClass = int(nodeTags.r);
+				} else {
+					depth = length(vec3(nodeExitPointDataSpace) - entryPointDataSpace)/totalDistance;
+					rayEventOccuClass = int(nodeTags.g);
+				}
+				addRayEvent(depth, nodeType, rayEventOccuClass, rayEventNum);
+				//rayEventNum++;
+
+				if(rayEventNum != intersected) {
+					fragColor = vec4(0, 1, 1, 0.5);
+					return;
+				}
+
+			
+					
+			}
+		}
+
+		
+		vec4 dstRGBA = vec4(0,0,0,0);
+		for(int eventIndex = 0; eventIndex < rayEventNum-1; ++eventIndex) {
+			rayEvent segBegin = rayEventList[eventIndex];
+			if(segBegin.occuClass == 0) {
+				// render this segment
+				rayEvent segEnd = rayEventList[eventIndex+1];
+		
+				if(segBegin.depth == segEnd.depth) continue;
+
+				// perform ray casting
+				vec3 segEntryPointDataSpace = entryPointDataSpace + segBegin.depth*rayDirection*totalDistance;
+				vec3 segExitPointDataSpace = entryPointDataSpace + segEnd.depth*rayDirection*totalDistance;
+
+				vec3 segEntryPoint = vec3(
+					segEntryPointDataSpace.x / dims.x,
+					segEntryPointDataSpace.y / dims.y,
+					segEntryPointDataSpace.z / dims.z
+				);
+				vec3 segExitPoint = vec3(
+					segExitPointDataSpace.x / dims.x,
+					segExitPointDataSpace.y / dims.y,
+					segExitPointDataSpace.z / dims.z
+				);
+				
+				dstRGBA = performRayCasting(segEntryPoint, segExitPoint, dstRGBA.rgb, dstRGBA.a);
+			} 
 		}
 		fragColor = dstRGBA;
 		return;

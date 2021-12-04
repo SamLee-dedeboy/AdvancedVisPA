@@ -20,6 +20,7 @@ class OccupancyHistogramTreeNode extends OctreeNode {
             emptyCount: 0,
             nonEmptyCount: 0
         };
+        this.emitIndex = -1;
     }
     addChildren(startPoint, endPoint, metaData, brickMetaDataArray, opacityTF) {
         this.children = []
@@ -48,5 +49,26 @@ class OccupancyHistogramTreeNode extends OctreeNode {
             //if(child.occuClass == 0) emptyCount++;
             this.children.push(child);
         }  
+    }
+    getBoundingBox() {
+        var occuClassArray = [];
+        var brickArray = [];
+        if(this.emitIndex != -1) {
+            brickArray.push(this.constructBoundingBox());
+            occuClassArray.push(this.occuClass);
+            
+        } 
+
+        for(var i = 0; i < this.children.length; ++i) {
+            var childNode = this.children[i];
+            var geometryWithOccuClass = childNode.getBoundingBox();
+            brickArray.push(geometryWithOccuClass.geometry);
+            occuClassArray.push(geometryWithOccuClass.occuClassArray);
+        }
+        return {
+            geometry: brickArray.flat(1),
+            occuClassArray: occuClassArray.flat(1)
+        }
+        
     }
 }

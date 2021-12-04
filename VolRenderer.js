@@ -78,6 +78,10 @@ class VolRenderer {
 		this.octreeStartPointTexture = gl.createTexture(); // 9
 		this.octreeEndPointTexture = gl.createTexture(); // 10
 
+		this.occuGeoTagTexture = gl.createTexture() // 11
+		this.occuGeoStartPointTexture = gl.createTexture(); //12
+		this.occuGeoEndPointTexture = gl.createTexture(); //13
+		this.visibilityOrderTexture = gl.createTexture(); //14
         // buffers
 		this.depthBuffer = this.gl.createFramebuffer();
 		this.exitPointFrameBuffer = this.gl.createFramebuffer();
@@ -192,6 +196,8 @@ class VolRenderer {
 		skipMode,
 		nonEmptyGeometry,
 		octreeBfsArray,
+		visibilityOrderArray,
+		occupancyGeometry,
 		bboxFacesDataSpace,
 		dataSpaceToClipSpace,
 		worldSpaceToClipSpace,
@@ -272,6 +278,15 @@ class VolRenderer {
 					dataSpaceToClipSpace, 
 					dims
 				)
+			} else if(skipMode == 3) {
+				this.setOccupancyGeometryTexture(occupancyGeometry, visibilityOrderArray);
+				this.renderBackfaces(
+					viewWidth, 
+					viewHeight, 
+					bboxFacesDataSpace, 
+					dataSpaceToClipSpace, 
+					dims
+				)
 			}
 			let gl = this.gl;	
 			let sp = this.raycastingVolumeRenderShader;
@@ -342,8 +357,16 @@ class VolRenderer {
 			gl.uniform1i( gl.getUniformLocation( sp, "octreeTagSampler"), 8);
 			gl.uniform1i( gl.getUniformLocation( sp, "octreeStartPointSampler"), 9);
 			gl.uniform1i( gl.getUniformLocation( sp, "octreeEndPointSampler"), 10);
+
+			gl.uniform1i( gl.getUniformLocation( sp, "occuGeoTagSampler"), 11);
+			gl.uniform1i( gl.getUniformLocation( sp, "occuGeoStartPointSampler"), 12);
+			gl.uniform1i( gl.getUniformLocation( sp, "occuGeoEndPointSampler"), 13);
+			gl.uniform1i( gl.getUniformLocation( sp, "visibilityOrderSampler"), 14);
+			gl.uniform1i( gl.getUniformLocation( sp, "visibilityOrderLength"), visibilityOrderArray == null? 0:visibilityOrderArray.length);
+
 			gl.uniform1i( gl.getUniformLocation( sp, "octreeTextureLength"), octreeBfsArray == null? 0:octreeBfsArray.length);
 					
+
 			// uniforms
 			gl.uniform1i( gl.getUniformLocation( sp, "volSampler" ), 0 );
 			gl.uniform1i( gl.getUniformLocation( sp, "colSampler" ), 1 );
@@ -1685,7 +1708,6 @@ class VolRenderer {
 		return this
 	}
 	setOctreeTexture(octreeBfsArray) {
-		console.log(octreeBfsArray)
 		var gl = this.gl
 		var octreeStartPointArray = [];
 		var octreeEndPointArray = [];
@@ -1753,6 +1775,103 @@ class VolRenderer {
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		return this
+	}
+	setOccupancyGeometryTexture(occupancyGeometry, pVisibilityOrderArray) {
+		console.log(occupancyGeometry, visibilityOrderArray)
+		var gl = this.gl
+		var occuGeoStartPointArray = [];
+		var occuGeoEndPointArray = [];
+		var occuGeoTagsArray = [];
+		var visibilityOrderArray = [];
+		// construct start point array, end point array, tag array in rgb
+		for(var nodeIndex = 0; nodeIndex < occupancyGeometry.geometry.length; ++nodeIndex) {
+			var geometry = occupancyGeometry.geometry[nodeIndex];
+			var tags =  occupancyGeometry.occuClasses[nodeIndex];
+			// start point array
+			occuGeoStartPointArray = occuGeoStartPointArray.concat(geometry[0].flat(1));
+			
+			// end point array	
+			occuGeoEndPointArray = occuGeoEndPointArray.concat(geometry[1].flat(1));
+
+			// tag array
+			occuGeoTagsArray.push(tags.flat(1))
+		}
+		console.log(occuGeoStartPointArray, occuGeoEndPointArray, occuGeoTagsArray)
+		for(var faceIndex = 0; faceIndex < pVisibilityOrderArray.length; ++faceIndex) {
+			var face = pVisibilityOrderArray[faceIndex];
+			visibilityOrderArray.push(face.index)
+			visibilityOrderArray.push(face.type)
+
+		}
+		console.log(visibilityOrderArray)
+		// tag texture
+		gl.activeTexture( gl.TEXTURE11 );
+		gl.bindTexture(gl.TEXTURE_2D, this.occuGeoTagTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RG16UI, 
+			occuGeoTagsArray.length/2, 
+			1, 
+			0, 
+			gl.RG_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(occuGeoTagsArray)
+		);
+		
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		// start point texture
+		gl.activeTexture( gl.TEXTURE12 );
+		gl.bindTexture(gl.TEXTURE_2D, this.occuGeoStartPointTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGB16UI, 
+			occuGeoStartPointArray.length/3, 
+			1, 
+			0, 
+			gl.RGB_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(occuGeoStartPointArray)
+		);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+		// end point texture
+		gl.activeTexture( gl.TEXTURE13 );
+		gl.bindTexture(gl.TEXTURE_2D, this.occuGeoEndPointTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RGB16UI, 
+			occuGeoEndPointArray.length/3, 
+			1, 
+			0, 
+			gl.RGB_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(occuGeoEndPointArray)
+		);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+		// visibility Order Array texture
+		gl.activeTexture( gl.TEXTURE14 );
+		gl.bindTexture(gl.TEXTURE_2D, this.visibilityOrderTexture)
+		gl.texImage2D(
+			gl.TEXTURE_2D, 
+			0, 
+			gl.RG16UI, 
+			visibilityOrderArray.length/2, 
+			1, 
+			0, 
+			gl.RG_INTEGER,
+			gl.UNSIGNED_SHORT,
+			new Uint16Array(visibilityOrderArray)
+		);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		return this;
 	}
 	setTF( colorTF, opacityTF )
 	{
