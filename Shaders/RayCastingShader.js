@@ -92,10 +92,10 @@ struct rayEvent {
 	int type;
 	int occuClass;
 };
-
+octreeNode octreeCurNode;
 rayEvent rayEventList[MAX_RAYEVENTLIST_SIZE];
 int rayEventNum = 0;
-
+int octreeDepth = 0;
 vec3 centralDifferenceNormal(vec3 texCoord) {
 	float h_x = 1.0/xDim;
 	float h_y = 1.0/yDim;
@@ -161,11 +161,24 @@ bool inNode(vec3 curPoint, vec3 startPoint, vec3 endPoint) {
 		(startPoint.z < curPoint.z || (abs(startPoint.z - curPoint.z) < 1.0)) && (curPoint.z < endPoint.z || (abs(endPoint.z - curPoint.z) < 1.0));
 		
 }
-octreeNode searchCurNode(uvec3 curPoint) {
-	octreeNode targetNode;
+void searchCurNode(vec3 curPoint) {
 	if(octreeTextureLength == 1) {
-		targetNode.index = 0;
-		return targetNode;
+		int index = 0;
+		float normalizedIndex = (float(index)+0.5)/float(octreeTextureLength);
+		uvec3 nodeStartPoint = texture(octreeStartPointSampler, vec2(normalizedIndex, 1)).xyz;
+		uvec3 nodeEndPoint = texture(octreeEndPointSampler, vec2(normalizedIndex, 1)).xyz;
+			
+		if(inNode(vec3(curPoint), vec3(nodeStartPoint), vec3(nodeEndPoint))) {
+			uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
+			
+			octreeCurNode.startPoint = nodeStartPoint;
+			octreeCurNode.endPoint = nodeEndPoint;
+			octreeCurNode.index = index;
+			octreeCurNode.occuClass = int(tags.y);
+			return;	
+			
+		}
+		return;
 	}
 	int index = 1;
 	int loopCount = 0;
@@ -182,19 +195,18 @@ octreeNode searchCurNode(uvec3 curPoint) {
 				uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
 				bool isLeafNode = (int(tags.x) == 0); 
 				if(isLeafNode) {
-					targetNode.startPoint = nodeStartPoint;
-					targetNode.endPoint = nodeEndPoint;
-					targetNode.index = index;
-					targetNode.occuClass = int(tags.y);
-					return targetNode;	
+					octreeCurNode.startPoint = nodeStartPoint;
+					octreeCurNode.endPoint = nodeEndPoint;
+					octreeCurNode.index = index;
+					octreeCurNode.occuClass = int(tags.y);
+					return;	
 				}
 				index = int(tags.x);
 				break;
 			}
 		}
 	}
-	targetNode.index = -1;
-	return targetNode;
+	octreeCurNode.index = -1;
 }
 vec4 performRayCasting(vec3 entryPoint, vec3 exitPoint, vec3 dstColor, float dstAlpha) {
 	// constant params
@@ -499,6 +511,8 @@ void main(void) {
 		vec4 dstRGBA = vec4(0,0,0,0);
 		entryPoint = texCoord;
 		exitPoint = texture(exitPointSampler, normalizedFragPos.xy).xyz;
+		fragColor = performRayCasting(entryPoint, exitPoint, vec3(0,0,0), 0.0);
+
 		vec3 dims = vec3(xDim, yDim, zDim);
 		vec3 entryPointDataSpace = vec3(
 			entryPoint.x * dims.x,
@@ -523,26 +537,36 @@ void main(void) {
 				break;
 			}
 			// find out which leaf node this point is in
-			uvec3 nodeEntryPointDataSpace = uvec3(
+			vec3 nodeEntryPointDataSpace = vec3(
 				nodeEntryPoint.x * xDim,
 				nodeEntryPoint.y * yDim,
 				nodeEntryPoint.z * zDim
 			);
-			octreeNode curNode = searchCurNode(nodeEntryPointDataSpace);
+			searchCurNode(nodeEntryPointDataSpace);
+			octreeNode curNode = octreeCurNode;
 			int curNodeIndex = curNode.index;
 			if(curNodeIndex == -1) {
-				fragColor = vec4(0, 0, 1, 1);
+				//fragColor = vec4(0, 0, 1, 1);
 				return;
 			}
 			// octreeExitPoint
 			vec3 nodeExitPointDataSpace = vec3(0,0,0);
-			vec3 tmp = vec3(0,0,0);
 			// calculate intersection point of line (entry,exit) and box curNode
-			if(checkLineBox(vec3(curNode.startPoint), vec3(curNode.endPoint), entryPointDataSpace, exitPointDataSpace, tmp, nodeExitPointDataSpace) == false) {
+			if(checkLineBox(vec3(curNode.startPoint), vec3(curNode.endPoint), entryPointDataSpace, exitPointDataSpace, nodeEntryPointDataSpace, nodeExitPointDataSpace)) {
 				//nodeExitPointDataSpace = vec3(nodeEntryPointDataSpace) + rayDirection*sampleDistance*dims;
 				
-				nodeExitPointDataSpace = vec3(nodeEntryPointDataSpace);
-				return;
+				//nodeExitPointDataSpace = vec3(nodeEntryPointDataSpace);
+				float entryDistance = length(nodeEntryPointDataSpace - entryPointDataSpace);
+				float exitDistance = length(nodeExitPointDataSpace - entryPointDataSpace);
+				if(entryDistance > exitDistance) {
+					// swap
+					vec3 tmp = nodeEntryPointDataSpace;
+					nodeEntryPointDataSpace = nodeExitPointDataSpace;
+					nodeExitPointDataSpace = tmp;
+				} 
+			} else {
+				//fragColor = vec4(1, 0, 0, 0.5);
+				//return;
 			}
 			
 			float nodeDistance = length(vec3(nodeExitPointDataSpace) - vec3(nodeEntryPointDataSpace));
@@ -560,8 +584,9 @@ void main(void) {
 			int occuClass = int(tags.y);
 
 			if(occuClass != 0) { // non-empty
-				dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
+				//dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
 			} 
+			octreeDepth++;
 
 			nodeEntryPoint = nodeExitPoint;
 			//nodeEntryPoint = nodeExitPoint + rayDirection*sampleDistance/dims;
@@ -569,7 +594,9 @@ void main(void) {
 			//fragColor = vec4(float(curNodeIndex)/float(octreeTextureLength), 0, 0, 1);
 		}
 		//fragColor = vec4(1, 0, 0, 0.5);
-		fragColor = dstRGBA;
+		//fragColor = dstRGBA;
+		float normalizedDepth = float(octreeDepth)/10.0;
+		fragColor.rgb *= normalizedDepth;
 		return;
 	} else if(skipMode == 3) {
 
@@ -681,7 +708,9 @@ void main(void) {
 				dstRGBA = performRayCasting(segEntryPoint, segExitPoint, dstRGBA.rgb, dstRGBA.a);
 			} 
 		}
+		float normalizedDepth = float(rayEventNum)/10.0;
 		fragColor = dstRGBA;
+		fragColor.rgb *= normalizedDepth;
 		return;
 	}
 

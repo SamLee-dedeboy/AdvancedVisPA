@@ -1962,7 +1962,14 @@ class VolRenderer {
 	    var gl = this.gl;
 		gl.disable( gl.DEPTH_TEST );
 	}
-
+	disableBlend() {
+		var gl = this.gl;
+		gl.disable( gl.BLEND );
+	}
+	enableBlend() {
+		var gl = this.gl;
+		gl.enable( gl.BLEND );
+	}
 	setTransparent3DRenderState()
 	{
 		var gl = this.gl;

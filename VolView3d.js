@@ -75,6 +75,58 @@ class VolView3d extends Canvas2dView
         c.append(colorPickerTitleElement);
         c.append(colorPickerElement);
         
+        var skipModeFormElement = document.createElement("form");
+        skipModeFormElement.setAttribute("id", "skipModeForm");
+        skipModeFormElement.style.position = "relative";
+
+        skipModeFormElement.style.left = 2*this.canvas.width -100+ "px";
+        skipModeFormElement.style.top = 0 + "px";
+        skipModeFormElement.style.width = 120 + "px";
+        skipModeFormElement.style.height = 30; + "px"
+        var noSkipElementInput = document.createElement("input");
+        noSkipElementInput.setAttribute("type", "radio");
+        noSkipElementInput.setAttribute("id", "noSkip");
+        noSkipElementInput.setAttribute("value", "no skip");
+        noSkipElementInput.setAttribute("name", "skipMode");
+        var noSkipElementLabel = document.createElement("label");
+        noSkipElementLabel.innerHTML += "no skip<br>";
+        skipModeFormElement.append(noSkipElementInput);
+        skipModeFormElement.append(noSkipElementLabel);
+
+        var approxElemetnInput = document.createElement("input");
+        approxElemetnInput.setAttribute("type", "radio");
+        approxElemetnInput.setAttribute("id", "approx");
+        approxElemetnInput.setAttribute("value", "approx");
+        approxElemetnInput.setAttribute("name", "skipMode");
+
+        var approxElementLabel = document.createElement("label");
+        approxElementLabel.innerHTML += "approx<br>";
+        skipModeFormElement.append(approxElemetnInput);
+        skipModeFormElement.append(approxElementLabel);
+
+        var octreeElementInput = document.createElement("input");
+        octreeElementInput.setAttribute("type", "radio");
+        octreeElementInput.setAttribute("id", "octree");
+        octreeElementInput.setAttribute("value", "octree");
+        octreeElementInput.setAttribute("name", "skipMode");
+
+        var octreeElementLabel = document.createElement("label");
+        octreeElementLabel.innerHTML += "octree<br>";
+        skipModeFormElement.append(octreeElementInput);
+        skipModeFormElement.append(octreeElementLabel);
+
+        var sparseLeapElementInput = document.createElement("input");
+        sparseLeapElementInput.setAttribute("type", "radio");
+        sparseLeapElementInput.setAttribute("id", "sparseleap");
+        sparseLeapElementInput.setAttribute("value", "sparseleap");
+        sparseLeapElementInput.setAttribute("name", "skipMode");
+
+        var sparseLeapElementLabel = document.createElement("label");
+        sparseLeapElementLabel.innerHTML += "sparseleap";
+        skipModeFormElement.append(sparseLeapElementInput);
+        skipModeFormElement.append(sparseLeapElementLabel);
+        
+        c.append(skipModeFormElement)
         this.mouseDown = false;
         var self = this;
 
@@ -140,6 +192,15 @@ class VolView3d extends Canvas2dView
         var hexColor = document.getElementById("lightSourceColorPicker").value
         var color = this.hexToRGB(hexColor);
         return color
+    }
+    getSkipMode() {
+        var radios = document.getElementsByName('skipMode');
+        for (var i = 0, length = radios.length; i < length; i++) {
+            if (radios[i].checked) {
+                return i;
+            }
+        }
+        return 3;
     }
     setSize( width, height )
     {

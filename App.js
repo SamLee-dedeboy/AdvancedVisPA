@@ -114,7 +114,7 @@ class App extends Widget {
 
 	renderBoundingBox3d( view, lines, MVP , occuClassArray = null)
 	{
-		console.log(occuClassArray)
+		//console.log(occuClassArray)
 		//occuClassArray = null
 		if(occuClassArray == null) {
 			this.VolRenderer.render( 
@@ -305,11 +305,14 @@ class App extends Widget {
  			// 	dims,
 			// 	this.lightingCheckBox.isChecked(), 
 			// 	0.5 );
-	
 			if(this.rayCastingCheckBox.isChecked()) {
 				let brickSize = 16;
-				var skipMode = 3; // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
-				if(this.tfChanged) {
+				this.lastSkipMode = 3;
+				this.skipMode = view.getSkipMode(); // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
+				var skipModeChanged = this.lastSkipMode != this.skipMode;
+				if(this.tfChanged || skipModeChanged || true) {
+					this.lastSkipMode = this.skipMode
+					var skipMode = this.skipMode;
 					if(skipMode == 1) {
 						if(this.approxGeo == null) {
 							this.approxGeo = new ApproxGeometry(brickSize, {dims: dims, min: this.dataMin, max: this.dataMax}, this.data);
@@ -318,6 +321,7 @@ class App extends Widget {
 						let nonEmptyCulling = this.approxGeo.getNonEmptyFacesGeometry(this.opcTfData)
 						this.nonEmptyGeometry = new Float32Array(nonEmptyCulling[0])
 						this.nonEmptyBoundingBox = new Float32Array(nonEmptyCulling[1])
+						this.boxOccuClass = null
 						this.tfChanged = false;	
 						console.log("get new geometry", this.nonEmptyGeometry.length)
 						
@@ -362,16 +366,18 @@ class App extends Widget {
 						this.nonEmptyBoundingBox = new Float32Array(occuGeoBoxWithOccuClass.geometry);
 						this.boxOccuClass = occuGeoBoxWithOccuClass.occuClassArray;
 						console.log("get new occupancy histogram geometry", this.occupancyGeometry)
+						this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
+
 						this.tfChanged = false;	
 
 					}
 					
 				}
-				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
+				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
 				//console.log(view.getCameraPosition())
-				if(skipMode == 3) {
-					this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
-				}
+				// if(skipMode == 3) {
+				// 	this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
+				// }
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
@@ -392,8 +398,7 @@ class App extends Widget {
 					view.getLightPositionWorldSpace(dims),
 					view.getLightColor(),
 					1 );
-				this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
-
+				
 			} else {
 				this.VolRenderer.renderViewAlignedCuttingPlanes( 
 					view.getSize().x, 
@@ -410,12 +415,19 @@ class App extends Widget {
 					0.25 );
 			}
 		}
-
-		if( this.bbCheckBox.isChecked() )
-		{
-			this.renderBoundingBox3d( view, view.getBoundingBoxGeometry( dims ), toClipSpace );
-		    this.VolRenderer.disableDepthTest();
+		if(this.bbCheckBox.isChecked()) {
+			//this.VolRenderer.setOpaque3DRenderState()
+			this.VolRenderer.disableDepthTest();
+			this.VolRenderer.disableBlend();
+			this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
+			this.VolRenderer.enableDepthTest();
+			this.VolRenderer.enableBlend();
 		}
+		// if( this.bbCheckBox.isChecked() )
+		// {
+		// 	this.renderBoundingBox3d( view, view.getBoundingBoxGeometry( dims ), toClipSpace );
+		//     this.VolRenderer.disableDepthTest();
+		// }
 
 		if( this.axisCheckBox.isChecked() )
 		{
@@ -724,20 +736,46 @@ class App extends Widget {
 			    self.metaDataView.set( self.metadata );
 	        }
 	    }, false );
-
+		
 	    this.volumeInput.getInputElement().addEventListener( 'change', function( e ) {
 
 	    	if( ! self.readMetadata )
 	    	{
 	    		return;
 	    	}
+			// console.log("Loading data...")
+			// self.data = []
+			// console.log(self.data)
+	         var file = e.target.files[ 0 ];
+			// var fileSize = file.size;                          // total size of file
+			// var sliceSize = 1<<23;                             // slice size, here 8 mb
+			// var count = Math.ceil(fileSize / sliceSize);       // calc number of parts
+			// var index = 0;                                     // part/slice index
+			
+			// console.log("File size:", fileSize);
+			// (function _slice() {                               // async "loop"
+			//   var start = index * sliceSize;                   // calc start pos. of current slice
+			//   var end = Math.min(start + sliceSize, fileSize); // calc end pos. of current slice
+			//   var slice = file.slice(start, end);              // slice the file blob to new blob
+			//   var fr = new FileReader();                       // read blob part as ArrayBuffer
+			//   fr.onload = function() {
+			// 	self.data.push(this.result);                       // store ArrayBuffer part
+			// 	index++;                                       // next slice
+			// 	console.log("Read part: " + index);
+			// 	if (index < count) _slice();                   // more slices? keep calm slice on
+			// 	else self.done();												// we're done, use some callback
+			//   };
+			//   // todo handle errors
+			//   fr.readAsArrayBuffer(slice);                     // convertt blob->ArrayBuffer
+			// })();
 
-	        var file = e.target.files[ 0 ];
+			
+			// -------------------
 	        var reader = new FileReader();
 	        reader.readAsArrayBuffer( file );
 
 	        reader.onload = function() {
-				console.log(self.metadata)
+				console.log("loaded!")
 	        	if( self.metadata.format == "FLOAT" )
 	        	{
 	            	self.data = new Float32Array( reader.result );
@@ -883,4 +921,18 @@ class App extends Widget {
     
 	    return this;
     }
+	done() {
+		console.log("read done!")
+		this.data = new Float32Array(this.data.flat(1))
+		this.readBinary = true;
+
+		this.metaInput.setHidden( false );
+		this.volumeInput.setHidden( true );
+
+		//this.metadata[ 'file' ] = file.name;
+
+		if( this.readMetadata ) {
+			this.begin();
+		}
+	}
 }
