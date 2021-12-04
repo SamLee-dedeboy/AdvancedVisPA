@@ -94,6 +94,7 @@ struct rayEvent {
 };
 
 rayEvent rayEventList[MAX_RAYEVENTLIST_SIZE];
+int rayEventNum = 0;
 
 vec3 centralDifferenceNormal(vec3 texCoord) {
 	float h_x = 1.0/xDim;
@@ -434,10 +435,8 @@ bool checkLineBox( vec3 B1, vec3 B2, vec3 L1, vec3 L2, out vec3 entryPoint, out 
 	// 	}
 	// return result;
 }
-int mergeRayEvent(float depth, int type, int occuClass, out int rayEventNum) {
-	return 0;
+int mergeRayEvent(float depth, int type, int occuClass) {
 	if(rayEventNum == 0) return 0;
-
 	rayEvent eventPrev = rayEventList[rayEventNum-1];
 	if(eventPrev.depth == depth) {
 		if(eventPrev.type == type) {	// both exit/entry
@@ -462,15 +461,9 @@ int mergeRayEvent(float depth, int type, int occuClass, out int rayEventNum) {
 	return 0;
 
 }
-void addRayEvent(float depth, int type, int occuClass, out int rayEventNum) {
-	rayEvent newEvent;
-		newEvent.depth = depth;
-		newEvent.type = type;
-		newEvent.occuClass = occuClass;
-		rayEventList[rayEventNum] = newEvent;
-		rayEventNum = rayEventNum + 1;
-	return;
-	int mergeFlag = mergeRayEvent(depth, type, occuClass, rayEventNum);
+void addRayEvent(float depth, int type, int occuClass) {
+
+	int mergeFlag = mergeRayEvent(depth, type, occuClass);
 	if(mergeFlag == 0) {	// no merging or deletion happens
 		rayEvent newEvent;
 		newEvent.depth = depth;
@@ -599,7 +592,6 @@ void main(void) {
 
 		vec3 nodeEntryPoint = entryPoint;
 		int occuGeoLength = visibilityOrderLength/2;
-		int rayEventNum = 0;
 
 			
 		vec3 hit = vec3(0,0,0);
@@ -648,13 +640,13 @@ void main(void) {
 					depth = length(vec3(nodeExitPointDataSpace) - entryPointDataSpace)/totalDistance;
 					rayEventOccuClass = int(nodeTags.g);
 				}
-				addRayEvent(depth, nodeType, rayEventOccuClass, rayEventNum);
+				addRayEvent(depth, nodeType, rayEventOccuClass);
 				//rayEventNum++;
 
-				if(rayEventNum != intersected) {
-					fragColor = vec4(0, 1, 1, 0.5);
-					return;
-				}
+				// if(rayEventNum != intersected) {
+				// 	fragColor = vec4(0, 1, 1, 0.5);
+				// 	return;
+				// }
 
 			
 					
