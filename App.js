@@ -47,6 +47,9 @@ class App extends Widget {
 		this.rayCastingCheckBox.setPosition( 
 			this.preIntegrateCheckBox.getPosition().x - this.rayCastingCheckBox.getSize().x - this.margin*2,
 			this.margin );
+		this.depthCheckBox.setPosition( 
+			this.rayCastingCheckBox.getPosition().x - this.depthCheckBox.getSize().x - this.margin*2,
+			this.margin );
 		this.panelWidth = Math.min( Math.max( 
 			this.resizeHandle.getPosition().x - this.margin*2,
 			minPanelWidth ), maxPanelWidth );
@@ -307,10 +310,12 @@ class App extends Widget {
 			// 	0.5 );
 			if(this.rayCastingCheckBox.isChecked()) {
 				let brickSize = 16;
-				this.lastSkipMode = 3;
+				if(this.lastSkipMode == null)
+					this.lastSkipMode = 3;
+
 				this.skipMode = view.getSkipMode(); // 0 = no, 1 = approx, 2 = octree, 3 = sparseLeap
 				var skipModeChanged = this.lastSkipMode != this.skipMode;
-				if(this.tfChanged || skipModeChanged || true) {
+				if(this.tfChanged || skipModeChanged ) {
 					this.lastSkipMode = this.skipMode
 					var skipMode = this.skipMode;
 					if(skipMode == 1) {
@@ -372,21 +377,20 @@ class App extends Widget {
 
 					}
 					
+				} else if(this.skipMode == 3) {
+					this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
 				}
-				//this.renderBoundingBox3d(view, this.nonEmptyBoundingBox, toClipSpace, this.boxOccuClass);
-				//console.log(view.getCameraPosition())
-				// if(skipMode == 3) {
-				// 	this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
-				// }
+				//console.log(skipMode,this.nonEmptyGeometry, this.bfsArray,)
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
 					view.getSize().y, 
 					view.getCameraPosition(),
-					skipMode,
+					this.skipMode,
 					this.nonEmptyGeometry,
 					this.bfsArray,
 					this.visibilityOrderArray,
 					this.occupancyGeometry,
+					this.depthCheckBox.isChecked(),
 					view.getFacesGeometry(dims),
 					MVP,
 					 view.worldSpaceToClipSpace( dims ),
@@ -612,6 +616,9 @@ class App extends Widget {
 		this.rayCastingCheckBox = new CheckBox( 
 			'body', 
 			"Ray-Casting" );
+		this.depthCheckBox = new CheckBox( 
+			'body', 
+			"Depth" );
         this.metaInput = new FileInput( 
         	this.id + "_fileIn", 
         	'body', 
@@ -859,6 +866,9 @@ class App extends Widget {
 		document.querySelector( this.rayCastingCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
 			self.renderVolView( self.volView3d );
 	    }, false );
+		document.querySelector( this.depthCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
+			self.renderVolView( self.volView3d );
+	    }, false );
 		document.querySelector( this.lightingCheckBox.getSelector() ).addEventListener( 'changed', function( e ) {
 			self.renderVolView( self.volView3d );
 	    }, false );
@@ -895,7 +905,12 @@ class App extends Widget {
 				self.renderVolView( self.volView3d );
 			}
 	    }, false );
-	
+		document.querySelector( self.volView3d.getSelector()  ).addEventListener( 'changeMethod', function( e ) {
+			if( self.readMetadata && self.readBinary )
+			{		
+				self.renderVolView( self.volView3d );
+			}
+	    }, false );
 
 	    document.querySelector( self.TFView.getSelector()  ).addEventListener( 'colorTFModified', function( e ) {
 			self.TFView.getOpacityBuffer()
