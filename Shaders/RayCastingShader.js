@@ -583,10 +583,11 @@ void main(void) {
 			uvec2 tags = texture(octreeTagSampler, vec2(normalizedIndex, 1)).rg;
 			int occuClass = int(tags.y);
 
-			if(occuClass != 0 || true) { // non-empty
+			if(occuClass != 0) { // non-empty
 				dstRGBA = performRayCasting(nodeEntryPoint, nodeExitPoint, dstRGBA.rgb, dstRGBA.a);
+				octreeDepth++;
+
 			} 
-			octreeDepth++;
 
 			nodeEntryPoint = nodeExitPoint;
 			//nodeEntryPoint = nodeExitPoint + rayDirection*sampleDistance/dims;
@@ -595,8 +596,8 @@ void main(void) {
 		}
 		//fragColor = vec4(1, 0, 0, 0.5);
 		fragColor = dstRGBA;
-		//float normalizedDepth = float(octreeDepth)/10.0;
-		//fragColor.rgb *= normalizedDepth;
+		float normalizedDepth = float(octreeDepth)/10.0;
+		fragColor.rgb *= normalizedDepth;
 		return;
 	} else if(skipMode == 3) {
 
