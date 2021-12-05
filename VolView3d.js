@@ -89,19 +89,22 @@ class VolView3d extends Canvas2dView
         noSkipElementInput.setAttribute("value", "no skip");
         noSkipElementInput.setAttribute("name", "skipMode");
         var noSkipElementLabel = document.createElement("label");
+        noSkipElementLabel.style.color = "white";
         noSkipElementLabel.innerHTML += "no skip<br>";
         skipModeFormElement.append(noSkipElementInput);
         skipModeFormElement.append(noSkipElementLabel);
 
-        var approxElemetnInput = document.createElement("input");
-        approxElemetnInput.setAttribute("type", "radio");
-        approxElemetnInput.setAttribute("id", "approx");
-        approxElemetnInput.setAttribute("value", "approx");
-        approxElemetnInput.setAttribute("name", "skipMode");
+        var approxElementnInput = document.createElement("input");
+        approxElementnInput.setAttribute("type", "radio");
+        approxElementnInput.setAttribute("id", "approx");
+        approxElementnInput.setAttribute("value", "approx");
+        approxElementnInput.setAttribute("name", "skipMode");
 
         var approxElementLabel = document.createElement("label");
         approxElementLabel.innerHTML += "approx<br>";
-        skipModeFormElement.append(approxElemetnInput);
+        approxElementLabel.style.color = "white";
+
+        skipModeFormElement.append(approxElementnInput);
         skipModeFormElement.append(approxElementLabel);
 
         var octreeElementInput = document.createElement("input");
@@ -112,6 +115,8 @@ class VolView3d extends Canvas2dView
 
         var octreeElementLabel = document.createElement("label");
         octreeElementLabel.innerHTML += "octree<br>";
+        octreeElementLabel.style.color = "white";
+
         skipModeFormElement.append(octreeElementInput);
         skipModeFormElement.append(octreeElementLabel);
 
@@ -123,6 +128,8 @@ class VolView3d extends Canvas2dView
 
         var sparseLeapElementLabel = document.createElement("label");
         sparseLeapElementLabel.innerHTML += "sparseleap";
+        sparseLeapElementLabel.style.color = "white";
+
         skipModeFormElement.append(sparseLeapElementInput);
         skipModeFormElement.append(sparseLeapElementLabel);
         
@@ -130,7 +137,18 @@ class VolView3d extends Canvas2dView
         this.mouseDown = false;
         var self = this;
 
-        
+        noSkipElementInput.addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changeMethod"));
+        }, false);
+        approxElementnInput.addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changeMethod"));
+        }, false);
+        octreeElementInput.addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changeMethod"));
+        }, false);
+        sparseLeapElementInput.addEventListener('input', function(event) {
+            c.dispatchEvent(new Event("changeMethod"));
+        }, false);
         this.lightPosX.getSlider().addEventListener('input', function(event) {
             c.dispatchEvent(new Event("changed"));
         }, false);
