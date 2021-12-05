@@ -198,6 +198,7 @@ class VolRenderer {
 		octreeBfsArray,
 		visibilityOrderArray,
 		occupancyGeometry,
+		showDepth,
 		bboxFacesDataSpace,
 		dataSpaceToClipSpace,
 		worldSpaceToClipSpace,
@@ -395,6 +396,8 @@ class VolRenderer {
 			gl.uniform1i( gl.getUniformLocation( sp, "doLighting" ), doLighting ? 1 : 0 );
 			gl.uniform1i( gl.getUniformLocation( sp, "preIntegrated" ), preIntegrated ? 1 : 0 );
 			gl.uniform1i( gl.getUniformLocation( sp, "skipMode" ), skipMode);
+			gl.uniform1i( gl.getUniformLocation( sp, "showDepth" ), showDepth? 1:0);
+
 			gl.uniformMatrix4fv( 
 				gl.getUniformLocation( sp, "M_WORLD_TO_DATA_SPACE" ), 
 				false, 
@@ -1777,7 +1780,7 @@ class VolRenderer {
 		return this
 	}
 	setOccupancyGeometryTexture(occupancyGeometry, pVisibilityOrderArray) {
-		console.log(occupancyGeometry, visibilityOrderArray)
+		console.log(occupancyGeometry, pVisibilityOrderArray)
 		var gl = this.gl
 		var occuGeoStartPointArray = [];
 		var occuGeoEndPointArray = [];

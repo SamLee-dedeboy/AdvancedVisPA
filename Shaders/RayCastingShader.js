@@ -77,6 +77,7 @@ uniform vec3 lightColor;
 uniform int doLighting;
 uniform int preIntegrated;
 uniform int skipMode;
+uniform int showDepth;
 out vec4 fragColor;
 in vec3 texCoord;
 
@@ -596,8 +597,10 @@ void main(void) {
 		}
 		//fragColor = vec4(1, 0, 0, 0.5);
 		fragColor = dstRGBA;
-		float normalizedDepth = float(octreeDepth)/10.0;
-		fragColor.rgb *= normalizedDepth;
+		if(showDepth == 1) {
+			float normalizedDepth = float(octreeDepth)/10.0;
+			fragColor.rgb *= normalizedDepth;
+		}
 		return;
 	} else if(skipMode == 3) {
 
@@ -709,9 +712,12 @@ void main(void) {
 				dstRGBA = performRayCasting(segEntryPoint, segExitPoint, dstRGBA.rgb, dstRGBA.a);
 			} 
 		}
-		float normalizedDepth = float(rayEventNum)/10.0;
 		fragColor = dstRGBA;
-		fragColor.rgb *= normalizedDepth;
+
+		if(showDepth == 1) {
+			float normalizedDepth = float(rayEventNum)/10.0;
+			fragColor.rgb *= normalizedDepth;
+		}
 		return;
 	}
 
