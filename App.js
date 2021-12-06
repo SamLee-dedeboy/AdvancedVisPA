@@ -331,7 +331,7 @@ class App extends Widget {
 						this.nonEmptyBoundingBox = new Float32Array(nonEmptyCulling[1])
 						this.boxOccuClass = null
 						this.tfChanged = false;	
-						console.log("get new geometry", this.nonEmptyGeometry.length)
+						//console.log("get new geometry", this.nonEmptyGeometry.length)
 						
 						// let brickBoundingBoxGeo = view.getBrickBoundingBoxGeometryDataSpace(brickSize, dims)
 						// let nonEmptyCulling = this.VolRenderer.getNonEmptyFacesGeometry(view.getBrickFacesGeometryDataSpace(brickSize, dims), brickSize, dims, brickBoundingBoxGeo)
@@ -349,7 +349,7 @@ class App extends Widget {
 						} 
 						this.octree.updateOccuClass({dims: dims, min: this.dataMin, max: this.dataMax},this.opcTfData);
 						
-						console.log("get new octree!", this.octree.root);
+						//console.log("get new octree!", this.octree.root);
 
 						var octreeBoxGeoWithOccuClass = this.octree.getBoundingBoxGeometry()
 						//console.log(octreeBoxGeoWithOccuClass)
@@ -373,7 +373,7 @@ class App extends Widget {
 						var occuGeoBoxWithOccuClass = this.sparseLeap.getGeometryBoundingBox()
 						this.nonEmptyBoundingBox = new Float32Array(occuGeoBoxWithOccuClass.geometry);
 						this.boxOccuClass = occuGeoBoxWithOccuClass.occuClassArray;
-						console.log("get new occupancy histogram geometry", this.occupancyGeometry)
+						//console.log("get new occupancy histogram geometry", this.occupancyGeometry)
 						this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
 
 						this.tfChanged = false;	
@@ -786,7 +786,7 @@ class App extends Widget {
 	        reader.readAsArrayBuffer( file );
 
 	        reader.onload = function() {
-				console.log("loaded!")
+				//console.log("loaded!")
 	        	if( self.metadata.format == "FLOAT" )
 	        	{
 	            	self.data = new Float32Array( reader.result );
@@ -941,7 +941,7 @@ class App extends Widget {
 	    return this;
     }
 	done() {
-		console.log("read done!")
+		//console.log("read done!")
 		this.data = new Float32Array(this.data.flat(1))
 		this.readBinary = true;
 

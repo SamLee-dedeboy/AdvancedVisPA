@@ -15,16 +15,16 @@ class SparseLeap {
     getGeometryBoundingBox() {
         if(this.boundingBoxArray == null || this.boxUpdated) this.boundingBoxArray = this.occupancyHistogramTree.root.getBoundingBox();
         this.boxUpdated = false;
-        console.log(this.boundingBoxArray)
+        //console.log(this.boundingBoxArray)
         return this.boundingBoxArray;
     }
     generateVisibilityOrder(cameraPosDataSpace) {
-        console.log(this.occupancyHistogramTree.root)
+        //console.log(this.occupancyHistogramTree.root)
         this.visibilityOrderArray = [];
         this.cameraPosDataSpace = cameraPosDataSpace;
         // update visibilityOrderArray
         this.getTraversalIndex(this.occupancyHistogramTree.root);
-        console.log(this.visibilityOrderArray)
+        //console.log(this.visibilityOrderArray)
         return this.visibilityOrderArray;
     }
     getTraversalIndex(node) {

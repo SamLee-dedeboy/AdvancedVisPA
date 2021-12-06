@@ -14,7 +14,7 @@ class Octree
         this.dataMin = metaData.min
         this.dataMax = metaData.max
         this.brickMetaDataArray = this.constructBrickMetaData(data, metaData.dims);
-        console.log(this.brickMetaDataArray)
+        //console.log(this.brickMetaDataArray)
         this.bfsArray = []
         //this.root.addChildren(this.root.startPoint, this.root.endPoint, metaData, data, opacityTF)
     }
@@ -69,7 +69,7 @@ class Octree
     getFacesGeometry() {
         if(this.boxFacesArray == null || this.faceUpdated) this.boxFacesArray = this.root.getBoxFaces();
         this.faceUpdated = false;
-        console.log(this.boxFacesArray)
+        //console.log(this.boxFacesArray)
         return this.boxFacesArray;
     }
     updateOccuClass(metaData, opacityTF) {

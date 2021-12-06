@@ -55,7 +55,7 @@ class VolRenderer {
 		    return;
 		}
 		
-		console.log(gl.getSupportedExtensions())
+		//console.log(gl.getSupportedExtensions())
         // Only continue if WebGL is available and working
         if ( gl === null) {
           window.alert( "Unable to initialize WebGL." );
@@ -1780,7 +1780,7 @@ class VolRenderer {
 		return this
 	}
 	setOccupancyGeometryTexture(occupancyGeometry, pVisibilityOrderArray) {
-		console.log(occupancyGeometry, pVisibilityOrderArray)
+		//console.log(occupancyGeometry, pVisibilityOrderArray)
 		var gl = this.gl
 		var occuGeoStartPointArray = [];
 		var occuGeoEndPointArray = [];
@@ -1799,14 +1799,14 @@ class VolRenderer {
 			// tag array
 			occuGeoTagsArray.push(tags.flat(1))
 		}
-		console.log(occuGeoStartPointArray, occuGeoEndPointArray, occuGeoTagsArray)
+		//console.log(occuGeoStartPointArray, occuGeoEndPointArray, occuGeoTagsArray)
 		for(var faceIndex = 0; faceIndex < pVisibilityOrderArray.length; ++faceIndex) {
 			var face = pVisibilityOrderArray[faceIndex];
 			visibilityOrderArray.push(face.index)
 			visibilityOrderArray.push(face.type)
 
 		}
-		console.log(visibilityOrderArray)
+		//console.log(visibilityOrderArray)
 		// tag texture
 		gl.activeTexture( gl.TEXTURE11 );
 		gl.bindTexture(gl.TEXTURE_2D, this.occuGeoTagTexture)
