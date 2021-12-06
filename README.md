@@ -112,3 +112,24 @@ for(voIndex = 0 to VisibilityOrderArray.length) {
 ```
 Similar to octree, the occupancy geomtry and visibility order needs to be passed to shader program as texture. This is implemented in `setOccupancyGeometryTexture()` in `VolRenderer.js`. Four textures are used: `occuGeoStartPointTexture`, `occuGeoEndPointTexture`, `occuGeoTagTexture` and `visibilityOrderTexture`. 
  
+# Evalutaion 
+As is mentioned in the paper, the sparsity of data will greatly affect the performance on different methods. So for some dataset, sparseLeap is not performing better than no skipping at all. But regardless of the sparsity, sparseLeap always out-performs octree-based and approxiamted geometry skipping. 
+
+Basic information of the dataset:
+| name | resolution | data type | size | 
+--- | --- | --- | --- |
+Head Aneurism | 512x512x512 | uint16 | 256.0 MB |
+Vortices | 128x128x128 | float | 8.1 MB |
+Bonsai | 256x256x256 | uint8 | 16.0MB |
+
+I use the following opacity tf:
+
+<img src="pics/vertebraOpc.png" alt="drawing" width="300" height="150"/>
+
+Below table gives the fps for each method:
+
+| dataset | No skip | Approx | Octree | SparseLeap |
+----- | ----- | ----- | ----- | ---- | 
+Head Aneurism | 35  | <10  | 20 | 40 |
+Vortices | 130 | 60 | 100 | 110 |
+Bonsai | 100 | 55 | 90 | 100 |
