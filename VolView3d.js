@@ -125,6 +125,7 @@ class VolView3d extends Canvas2dView
         sparseLeapElementInput.setAttribute("id", "sparseleap");
         sparseLeapElementInput.setAttribute("value", "sparseleap");
         sparseLeapElementInput.setAttribute("name", "skipMode");
+        sparseLeapElementInput.setAttribute("checked", "checked");
 
         var sparseLeapElementLabel = document.createElement("label");
         sparseLeapElementLabel.innerHTML += "sparseleap";

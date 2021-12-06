@@ -318,7 +318,10 @@ class App extends Widget {
 				if(this.tfChanged || skipModeChanged ) {
 					this.lastSkipMode = this.skipMode
 					var skipMode = this.skipMode;
-					if(skipMode == 1) {
+					if(skipMode == 0) {
+						this.boxOccuClass = null
+						this.nonEmptyBoundingBox = view.getBoundingBoxGeometry( dims )
+					} else if(skipMode == 1) {
 						if(this.approxGeo == null) {
 							this.approxGeo = new ApproxGeometry(brickSize, {dims: dims, min: this.dataMin, max: this.dataMax}, this.data);
 						} 
@@ -379,7 +382,7 @@ class App extends Widget {
 					
 				} else if(this.skipMode == 3) {
 					this.visibilityOrderArray = this.sparseLeap.generateVisibilityOrder(view.getCameraPositionDataSpace(dims))
-				}
+				} 
 				//console.log(skipMode,this.nonEmptyGeometry, this.bfsArray,)
 				this.VolRenderer.renderRayCastingVolume( 
 					view.getSize().x, 	
@@ -619,6 +622,7 @@ class App extends Widget {
 		this.depthCheckBox = new CheckBox( 
 			'body', 
 			"Depth" );
+		this.depthCheckBox.setChecked(false);
         this.metaInput = new FileInput( 
         	this.id + "_fileIn", 
         	'body', 

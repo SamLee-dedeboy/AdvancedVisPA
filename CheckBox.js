@@ -59,7 +59,19 @@ class CheckBox extends Widget
 	{ 
 		return this.checked;
 	}
-
+	setChecked(checked) {
+		this.checked = checked;
+		var boxE = this.boxE
+		if( this.checked )
+			{
+                boxE.innerHTML = '\u2714';
+			}
+			else
+			{					
+                boxE.innerHTML = '';
+			}
+		document.querySelector( this.getSelector() ).dispatchEvent( new Event( "changed" ) );
+	}
     setTransparency( a )
     {
         this.boxE.style[ "background-color" ] = "rgba(255,255,255," + a + ")";
